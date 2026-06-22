@@ -44,7 +44,7 @@ enum AgentPathSetup {
     // MARK: - Shell PATH
 
     private static func ensureShellPath() {
-        let line = "\nexport PATH=\"$HOME/.agentterminal/bin:$PATH\"\n"
+        let line = "\n# AgentTerminal\nexport PATH=\"$HOME/.agentterminal/bin:$PATH\"\n"
         let home = FileManager.default.homeDirectoryForCurrentUser
         // macOS default is zsh; bash as a secondary target.
         for rc in [home.appendingPathComponent(".zshrc"),

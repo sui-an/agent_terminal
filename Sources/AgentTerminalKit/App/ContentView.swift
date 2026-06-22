@@ -91,7 +91,7 @@ struct ContentView: View {
 
     private var sidebarTooltip: String {
         switch store.sidebarMode {
-        case .full: return "Compact sidebar"
+        case .full: return "Foldable sidebar"
         case .compact: return "Hide sidebar"
         case .hidden: return "Show sidebar"
         }

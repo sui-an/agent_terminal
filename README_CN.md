@@ -10,6 +10,8 @@
 - 自持Agent之间的通信和协作；
 - MIT，基于Ghostty GPU 渲染基于 [libghostty](https://github.com/ghostty-org/ghostty)。
 
+![AgentTerminal Image](./Sources/AgentTerminalKit/Resources/Img/AgentTerminal.png)
+
 ---
 
 ## 功能
