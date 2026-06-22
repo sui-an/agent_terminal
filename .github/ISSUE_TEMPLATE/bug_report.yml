@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in kooky is broken or behaving wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! A few specifics make a bug much faster to fix.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+      placeholder: When I …, kooky … — I expected …
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: kooky-version
+    attributes:
+      label: kooky version
+      description: kooky menu → About kooky
+      placeholder: "0.26.1"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac
+      placeholder: "15.1"
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent involved (if any)
+      description: Claude Code / Codex / Gemini / etc., or "none / plain terminal"
+      placeholder: Claude Code
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, the shell you use (zsh / bash), your theme, or logs — whatever might help.
+    validations:
+      required: false

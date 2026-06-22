@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea or improvement for kooky
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the pain?
+      description: What are you trying to do that kooky makes hard or impossible today?
+      placeholder: When I …, I have to … because kooky doesn't …
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the feature or behavior you'd want.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / workarounds
+      description: Anything you do today to work around it, or other approaches you considered.
+    validations:
+      required: false
