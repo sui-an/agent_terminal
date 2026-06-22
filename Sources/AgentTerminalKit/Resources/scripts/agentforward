@@ -1,0 +1,284 @@
+#!/bin/bash
+
+# agentforward: Agent 消息转发工具（支持名称别名）
+#
+# 特性:
+#   - 支持 agent 名称别名（如 @forward claude "msg"）
+#   - 自动解析运行中的 agent 名称到 session UUID
+#   - 支持 @list 命令查看运行中的 agent
+#   - 支持 UUID 直接转发（向后兼容）
+#
+# 用法:
+#   # 通过 stdin 自动检测 @forward 语法
+#   echo "@forward claude \"请检查这个代码\"" | agentforward claude-code
+#
+#   # 命令行直接发送
+#   agentforward claude-code claude "直接发送消息"
+#
+#   # 查看运行中的 agent
+#   agentforward list
+
+set -euo pipefail
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# 依赖检查
+if ! command -v jq &>/dev/null; then
+    echo -e "${RED}错误: 需要安装 jq${NC}" >&2
+    echo "安装方法: brew install jq" >&2
+    exit 1
+fi
+
+if [ -z "${AGENTTERMINAL_HOOK_BIN:-}" ]; then
+    echo -e "${RED}错误: AGENTTERMINAL_HOOK_BIN 未设置${NC}" >&2
+    echo -e "${YELLOW}提示: 请在 AgentTerminal 中运行此命令${NC}" >&2
+    exit 1
+fi
+
+if [ ! -x "$AGENTTERMINAL_HOOK_BIN" ]; then
+    echo -e "${RED}错误: AGENTTERMINAL_HOOK_BIN 指向的文件不可执行: $AGENTTERMINAL_HOOK_BIN${NC}" >&2
+    exit 1
+fi
+
+# 帮助信息
+show_help() {
+    cat << 'EOF'
+agentforward: Agent 消息转发工具
+
+功能:
+  - 支持 agent 名称别名（如 claude, codex, gemini）
+  - 自动解析运行中的 agent 到 session UUID
+  - 支持 @list 查看运行中的 agent
+  - 支持 UUID 直接转发（向后兼容）
+
+用法:
+  # 通过 stdin 自动检测 @forward 语法
+  echo "@forward claude \"请检查这个代码\"" | agentforward claude-code
+
+  # 命令行直接发送
+  agentforward claude-code claude "请帮我review这个PR"
+
+  # 查看运行中的 agent
+  agentforward list
+
+检测语法:
+  @forward <target> <message>
+
+  target 可以是:
+    - agent 名称: claude, codex, gemini, mimo, pi, ...
+    - session UUID: abc123-def456-...
+
+  示例:
+    @forward claude "请检查这个错误"
+    @forward codex "修复这个 bug"
+    @forward 550e8400-e29b-41d4-a716-446655440000 "测试消息"
+
+  @list  — 显示所有运行中的 agent
+
+Tab 补全安装:
+  Bash: source /path/to/agentforward-completion.bash
+  Zsh:  fpath=(/path/to/scripts $fpath) && compinit
+  Fish: ln -s /path/to/agentforward-completion.fish ~/.config/fish/completions/
+
+EOF
+}
+
+# 查询运行中的 agent
+query_agents() {
+    local surface_id="${AGENTTERMINAL_SURFACE_ID:-}"
+    if [ -z "$surface_id" ]; then
+        echo "[]"
+        return 1
+    fi
+    local result
+    result=$(AGENTTERMINAL_SURFACE_ID="$surface_id" "$AGENTTERMINAL_HOOK_BIN" claude list 2>/tmp/agentforward_hook_err)
+    if [ $? -ne 0 ]; then
+        cat /tmp/agentforward_hook_err >&2 2>/dev/null
+        rm -f /tmp/agentforward_hook_err
+        echo "[]"
+        return 1
+    fi
+    rm -f /tmp/agentforward_hook_err
+    echo "$result"
+}
+
+# 列出所有运行中的 agent
+list_agents() {
+    local agents_json
+    agents_json=$(query_agents)
+
+    if [ -z "$agents_json" ] || [ "$agents_json" = "[]" ]; then
+        echo -e "${YELLOW}没有运行中的 agent${NC}"
+        return 0
+    fi
+
+    echo -e "${GREEN}运行中的 agents:${NC}"
+    echo "$agents_json" | jq -r '.agents[] | "  \(.agent) (\(.state)) - \(.title) [\( .id[0:8] )...]"' 2>/dev/null
+}
+
+# 将 agent 名称解析为 session UUID
+resolve_agent() {
+    local name="$1"
+    local agents_json
+    agents_json=$(query_agents)
+
+    if [ -z "$agents_json" ] || [ "$agents_json" = "[]" ]; then
+        echo -e "${RED}错误: 无法获取运行中的 agent 列表${NC}" >&2
+        echo -e "${YELLOW}提示: 确保 AgentTerminal 正在运行${NC}" >&2
+        return 1
+    fi
+
+    local matches
+    matches=$(echo "$agents_json" | jq -r --arg name "$name" \
+        '[.agents[] | select(.agent == $name or (.agent | startswith($name)))] | length' 2>/dev/null)
+
+    if [ "$matches" = "0" ] || [ -z "$matches" ]; then
+        echo -e "${RED}错误: 未找到名为 '$name' 的运行中 agent${NC}" >&2
+        echo -e "${YELLOW}提示: 使用 'agentforward list' 查看所有运行中的 agent${NC}" >&2
+        return 1
+    fi
+
+    if [ "$matches" -gt 1 ]; then
+        echo -e "${YELLOW}警告: 找到 $matches 个名为 '$name' 的 agent，使用第一个${NC}" >&2
+        echo "$agents_json" | jq -r --arg name "$name" \
+            '[.agents[] | select(.agent == $name or (.agent | startswith($name)))] | .[0].id' 2>/dev/null
+    else
+        echo "$agents_json" | jq -r --arg name "$name" \
+            '.agents[] | select(.agent == $name or (.agent | startswith($name))) | .id' 2>/dev/null | head -1
+    fi
+}
+
+# 剥离字符串外围的引号
+strip_quotes() {
+    local s="$1"
+    if [[ "$s" =~ ^\"(.*)\"$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+    elif [[ "$s" =~ ^\'(.*)\'$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo "$s"
+    fi
+}
+
+# 验证 UUID 格式
+validate_uuid() {
+    local uuid="$1"
+    if [[ "$uuid" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# 检测并转发 @forward 语法
+parse_forward() {
+    local line="$1"
+    if [[ "$line" =~ ^@forward[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)$ ]]; then
+        local target="${BASH_REMATCH[1]}"
+        local content
+        content=$(strip_quotes "${BASH_REMATCH[2]}")
+
+        local target_id
+        if validate_uuid "$target"; then
+            target_id="$target"
+        else
+            target_id=$(resolve_agent "$target") || return 2
+        fi
+
+        echo -e "${GREEN}[转发]${NC} $target -> $target_id: $content"
+        if ! "$AGENTTERMINAL_HOOK_BIN" "$ARG_CURRENT_AGENT" message "$target_id" "$content"; then
+            return 2
+        fi
+        return 0
+    fi
+    return 1
+}
+
+# 解析参数
+ARG_CURRENT_AGENT=""
+ARG_MESSAGE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        list)
+            list_agents
+            exit 0
+            ;;
+        *)
+            if [ -z "$ARG_CURRENT_AGENT" ]; then
+                ARG_CURRENT_AGENT="$1"
+            else
+                if [ -z "$ARG_MESSAGE" ]; then
+                    ARG_MESSAGE="$1"
+                else
+                    ARG_MESSAGE="$ARG_MESSAGE $1"
+                fi
+            fi
+            shift
+            ;;
+    esac
+done
+
+# 主逻辑
+main() {
+    local message_count=0
+
+    # Only enter stdin mode when stdin is not a TTY AND no args were provided.
+    # This ensures cmdline args work even in non-TTY environments (e.g. OpenCode bash tool).
+    if [ ! -t 0 ] && [ -z "$ARG_MESSAGE" ]; then
+        while IFS= read -r line; do
+            if [[ "$line" = "@list" ]]; then
+                list_agents
+                message_count=$((message_count + 1))
+                continue
+            fi
+            if parse_forward "$line"; then
+                message_count=$((message_count + 1))
+            else
+                case $? in
+                    1)
+                        echo "$line"
+                        ;;
+                    *)
+                        exit 1
+                        ;;
+                esac
+            fi
+        done
+    elif [ -n "$ARG_MESSAGE" ]; then
+        local target_id
+        if validate_uuid "$ARG_CURRENT_AGENT"; then
+            target_id="$ARG_CURRENT_AGENT"
+        else
+            target_id=$(resolve_agent "$ARG_CURRENT_AGENT") || exit 1
+        fi
+        echo -e "${GREEN}[直接发送]${NC} $target_id: $ARG_MESSAGE"
+        if "$AGENTTERMINAL_HOOK_BIN" "$ARG_CURRENT_AGENT" message "$target_id" "$ARG_MESSAGE"; then
+            message_count=$((message_count + 1))
+            echo -e "${GREEN}✓ 转发成功${NC}"
+        else
+            echo -e "${RED}✗ 转发失败${NC}" >&2
+            exit 1
+        fi
+    else
+        echo -e "${RED}错误: 没有提供消息内容${NC}" >&2
+        echo "使用 -h 查看帮助" >&2
+        exit 1
+    fi
+
+    if [ $message_count -gt 0 ]; then
+        exit 0
+    else
+        echo -e "${YELLOW}没有检测到要转发的消息${NC}" >&2
+        exit 1
+    fi
+}
+
+main

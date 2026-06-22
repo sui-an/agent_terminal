@@ -278,21 +278,39 @@ enum AgentTerminalShellIntegration {
     }()
 
     /// Copy `agentforward` script into the bin directory so it's on PATH.
-    static let agentforwardScriptPath: String = {
-        guard let exe = Bundle.main.executablePath else { return "" }
-        let bundled = (exe as NSString).deletingLastPathComponent + "/../Scripts/agentforward"
+    static func installAgentForwardScript() {
         let fm = FileManager.default
-        guard fm.fileExists(atPath: bundled) else { return bundled }
         let dest = (agentterminalBinDirectory as NSString).appendingPathComponent("agentforward")
+        // Try finding the script resource in any bundle (SPM or .app).
+        // bundleResourceURL is @MainActor, so we iterate bundles directly here.
+        // Note: SPM processes Resources with .process(), which flattens all
+        // subdirectory contents to the bundle root — no subdirectory prefix.
+        let bundlesToCheck: [Bundle] = [Bundle.main] + Bundle.allBundles
+        var sourceURL: URL?
+        for bundle in bundlesToCheck {
+            if let url = bundle.url(forResource: "agentforward", withExtension: nil) {
+                sourceURL = url
+                break
+            }
+        }
+        if let url = sourceURL, fm.fileExists(atPath: url.path) {
+            do {
+                try? fm.removeItem(atPath: dest)
+                try fm.copyItem(atPath: url.path, toPath: dest)
+                try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dest)
+                return
+            } catch {}
+        }
+        // Fallback: try adjacent to executable (legacy .app bundle layout)
+        guard let exe = Bundle.main.executablePath else { return }
+        let bundled = (exe as NSString).deletingLastPathComponent + "/../Scripts/agentforward"
+        guard fm.fileExists(atPath: bundled) else { return }
         do {
             try? fm.removeItem(atPath: dest)
             try fm.copyItem(atPath: bundled, toPath: dest)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dest)
-            return dest
-        } catch {
-            return bundled
-        }
-    }()
+        } catch {}
+    }
 
     /// Copy `agentterminal-uninstall` script into the bin directory.
     static let uninstallScriptPath: String = {
@@ -402,6 +420,9 @@ enum AgentTerminalShellIntegration {
         // lifecycle feed agentterminal can map to attention, so running/ended is all
         // the wrapper surfaces. We wrap `kiro-cli`, never `kiro` (the IDE
         // launcher).
+
+        // Ensure `agentforward` CLI script is available in the bin directory.
+        installAgentForwardScript()
     }
 
     static func refreshSshRemoteAgentDetection(enabled: Bool) {

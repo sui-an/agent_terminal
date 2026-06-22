@@ -10,7 +10,14 @@ Highlights:
 - Built-in agent-to-agent communication and collaboration;
 - MIT licensed, with GPU rendering powered by [libghostty](https://github.com/ghostty-org/ghostty).
 
-[AgentTerminal Image](./Sources/AgentTerminalKit/Resources/Img/AgentTerminal.png)
+**Multiple windows**
+![AgentTerminal MultiWindow](./Sources/AgentTerminalKit/Resources/Img/AgentTerminal.png)
+
+**Notification**
+![AgentTerminal Notification](./Sources/AgentTerminalKit/Resources/Img/notification.png)
+
+**Agent-to-agent collaboration**
+![AgentTerminal collaboration](./Sources/AgentTerminalKit/Resources/Img/forward.png)
 
 ---
 
