@@ -1454,7 +1454,7 @@ final class WorkspaceStore {
             session.remoteHost = nil
             session.lastCommandExit = exit
             session.lastCommandDuration = duration
-            if let exit, exit != 0 { self?.onSessionAlert(session.id, .failure) }
+            if let exit, exit != 0, session.agent == .terminal { self?.onSessionAlert(session.id, .failure) }
             workspace?.invalidateReadout()
             self?.refreshGitStatus(for: session)
             self?.refreshEnvironment(for: session)
