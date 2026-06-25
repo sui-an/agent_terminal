@@ -236,6 +236,18 @@ enum AgentTerminalShellIntegration {
         return dir.appendingPathComponent("agentterminal.ts").path
     }()
 
+    static let mimocodePluginPath: String = {
+        let base: URL
+        if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+            base = URL(fileURLWithPath: xdg, isDirectory: true)
+        } else {
+            base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config")
+        }
+        let dir = base.appendingPathComponent("mimocode/plugins/agentterminal", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("agentterminal.js").path
+    }()
+
     private static let hooksDirectory: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = support.appendingPathComponent("agentterminal/hooks", isDirectory: true)
@@ -398,6 +410,11 @@ enum AgentTerminalShellIntegration {
         writeJSON(at: geminiDefaultsPath, object: geminiDefaultsObject(hookCmd: hookCmd))
         installCopilotHooksIfPresent(hookCmd: hookCmd)
         writeManagedFile(at: opencodePluginPath, contents: opencodePluginScript)
+        // MiMoCode uses a plugin system (not a hooks JSON). The plugin is a managed
+        // .js file that pings AgentTerminalHook on chat.message (running) and
+        // session.idle (attention) events.
+        writeManagedFile(at: mimocodePluginPath, contents: mimocodePluginScript)
+        registerMimocodePlugin()
         installPiExtensionIfPresent()
         // Grok CLI has no JSON hook file like Claude — its `~/.grok/hooks/`
         // is a script directory driven by env vars (GROK_HOOK_EVENT /
@@ -1179,6 +1196,58 @@ enum AgentTerminalShellIntegration {
       }
     }
     """
+
+    static let mimocodePluginScript = """
+    // \(managedFileMarker) — pings AgentTerminalHook on message-submit and turn-end so
+    // the sidebar agent dot tracks per-session activity. Safe to delete; will
+    // be regenerated next time agentterminal launches.
+    const plugin = async ({ $ }) => {
+      const surface = process.env.AGENTTERMINAL_SURFACE_ID
+      const hookBin = process.env.AGENTTERMINAL_HOOK_BIN
+      if (!surface || !hookBin) return {}
+
+      const ping = async (state) => {
+        try { await $`${hookBin} mimocode ${state}`.quiet() } catch {}
+      }
+
+      return {
+        "chat.message": async () => { await ping("running") },
+        event: async ({ event }) => {
+          if (event?.type === "session.idle") await ping("attention")
+        },
+      }
+    }
+
+    export const server = plugin
+    export default plugin
+    """
+
+    static func registerMimocodePlugin() {
+        let configPath: String = {
+            let base: URL
+            if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+                base = URL(fileURLWithPath: xdg, isDirectory: true)
+            } else {
+                base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config")
+            }
+            return base.appendingPathComponent("mimocode/mimocode.json").path
+        }()
+
+        guard FileManager.default.fileExists(atPath: configPath),
+              let data = FileManager.default.contents(atPath: configPath),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        var plugins = (json["plugin"] as? [String]) ?? []
+        let pluginDir = (mimocodePluginPath as NSString).deletingLastPathComponent
+        guard !plugins.contains(pluginDir) else { return }
+        plugins.append(pluginDir)
+        json["plugin"] = plugins
+
+        if let newData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+            try? newData.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+        }
+    }
 
     enum DetectedUserShell { case zsh, bash, other }
 
