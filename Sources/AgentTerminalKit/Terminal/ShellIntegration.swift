@@ -414,6 +414,9 @@ enum AgentTerminalShellIntegration {
         // .js file that pings AgentTerminalHook on chat.message (running) and
         // session.idle (attention) events.
         writeManagedFile(at: mimocodePluginPath, contents: mimocodePluginScript)
+        let mimocodePluginDir = (mimocodePluginPath as NSString).deletingLastPathComponent
+        let mimocodePkgPath = (mimocodePluginDir as NSString).appendingPathComponent("package.json")
+        writeManagedFile(at: mimocodePkgPath, contents: mimocodePluginPackageJson)
         registerMimocodePlugin()
         installPiExtensionIfPresent()
         // Grok CLI has no JSON hook file like Claude — its `~/.grok/hooks/`
@@ -1201,13 +1204,13 @@ enum AgentTerminalShellIntegration {
     // \(managedFileMarker) — pings AgentTerminalHook on message-submit and turn-end so
     // the sidebar agent dot tracks per-session activity. Safe to delete; will
     // be regenerated next time agentterminal launches.
-    const plugin = async ({ $ }) => {
+    const AgentTerminalPlugin = async ({ $ }) => {
       const surface = process.env.AGENTTERMINAL_SURFACE_ID
       const hookBin = process.env.AGENTTERMINAL_HOOK_BIN
       if (!surface || !hookBin) return {}
 
       const ping = async (state) => {
-        try { await $`${hookBin} mimocode ${state}`.quiet() } catch {}
+        try { await $`${hookBin} mimo ${state}`.quiet() } catch {}
       }
 
       return {
@@ -1218,8 +1221,18 @@ enum AgentTerminalShellIntegration {
       }
     }
 
-    export const server = plugin
-    export default plugin
+    export const server = AgentTerminalPlugin
+    export default AgentTerminalPlugin
+    export { AgentTerminalPlugin }
+    """
+
+    static let mimocodePluginPackageJson = """
+    {
+      "name": "agentterminal",
+      "version": "1.0.0",
+      "main": "agentterminal.js",
+      "private": true
+    }
     """
 
     static func registerMimocodePlugin() {
