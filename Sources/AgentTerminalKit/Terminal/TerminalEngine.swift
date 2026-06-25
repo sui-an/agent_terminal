@@ -70,6 +70,10 @@ protocol TerminalEngine: AnyObject {
     /// don't fire this — libghostty's "press any key to close" message
     /// stays so the user can read crash output before dismissing.
     var onProcessExitedCleanly: (() -> Void)? { get set }
+    /// Fires when the terminal receives a BEL character (`\x07`). Programs
+    /// use BEL to request user attention — e.g. Claude Code's permission
+    /// prompts, shell error alerts, or `echo -e '\a'`.
+    var onBell: (() -> Void)? { get set }
     func start(config: TerminalSessionConfig)
     func terminate()
     /// When true, AppKit `setFrameSize` callbacks skip `ghostty_surface_set_size`.

@@ -390,6 +390,7 @@ enum AgentTerminalShellIntegration {
         writeWrapper(name: "kimi", script: bracketWrapperScript(slug: "kimi"))
         writeWrapper(name: "pi", script: bracketWrapperScript(slug: "pi"))
         writeWrapper(name: "kiro-cli", script: bracketWrapperScript(slug: "kiro-cli"))
+        writeWrapper(name: "mimo", script: bracketWrapperScript(slug: "mimo"))
         refreshSshRemoteAgentDetection(enabled: sshRemoteAgentDetection)
 
         let hookCmd = agentterminalHookBinaryPath
@@ -555,6 +556,10 @@ enum AgentTerminalShellIntegration {
     /// `PostToolUseFailure`, a failed tool call's Pre record sits in `.running`
     /// for 60s before flipping to `.stalled` instead of immediately showing the
     /// red failure pill.
+    /// PreToolUse is a passthrough event (tool payload for the activity strip)
+    /// AND also triggers `.attention` so the user gets notified when Claude
+    /// pauses for a permission prompt mid-turn. `main.swift` sends both the
+    /// tool payload and a lifecycle attention payload for this event.
     static func claudeHooksObject(hookCmd: String) -> [String: Any] {
         hooksObject(
             slug: "claude",

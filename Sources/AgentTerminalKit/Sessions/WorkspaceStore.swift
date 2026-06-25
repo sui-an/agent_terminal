@@ -158,6 +158,16 @@ final class WorkspaceStore {
     private var recentlyClosed: [ClosedTabState] = []
     private static let closedTabHistoryLimit = 50
 
+    /// Timestamp of the last BEL-triggered notification per session, used to
+    /// debounce rapid BEL bursts (e.g. a programmatic `\a` loop).
+    private var lastBellTime: [UUID: Date] = [:]
+    private static let bellDebounce: TimeInterval = 2
+    /// Timestamp of the last attention notification per session, used to
+    /// debounce rapid attention events (e.g. PreToolUse firing for every
+    /// tool call in a turn).
+    private var lastAttentionTime: [UUID: Date] = [:]
+    private static let attentionDebounce: TimeInterval = 1
+
     private var pendingSave: Task<Void, Never>?
     /// Monotonic counter bumped on every `toggleZoom`. The async restore
     /// Task captures the value at toggle time and bails if the counter has
@@ -1132,7 +1142,20 @@ final class WorkspaceStore {
         // sidebar/tab observer even on same-value assignment, so guard.
         if session.activityState != event.activityState {
             session.activityState = event.activityState
-            if event.activityState == .attention { onSessionAlert(session.id, .attention) }
+            if event.activityState == .attention {
+                // Debounce: PreToolUse fires for every tool call in a turn,
+                // but only permission-requiring ones need a notification.
+                // The debounce prevents spam while still allowing Stop
+                // (which fires after all tool calls) to trigger.
+                let now = Date()
+                if let last = lastAttentionTime[session.id],
+                   now.timeIntervalSince(last) < Self.attentionDebounce {
+                    // Skip notification but still update state
+                } else {
+                    lastAttentionTime[session.id] = now
+                    onSessionAlert(session.id, .attention)
+                }
+            }
             if let (workspace, _) = location(ofSessionId: sessionId) {
                 workspace.invalidateReadout()
             }
@@ -1445,6 +1468,14 @@ final class WorkspaceStore {
         engine.onProcessExitedCleanly = { [weak self, weak session, weak workspace] in
             guard let self, let session, let workspace else { return }
             self.closeTab(session, in: workspace)
+        }
+        engine.onBell = { [weak self, weak session] in
+            guard let self, let session else { return }
+            let now = Date()
+            if let last = self.lastBellTime[session.id],
+               now.timeIntervalSince(last) < Self.bellDebounce { return }
+            self.lastBellTime[session.id] = now
+            self.onSessionAlert(session.id, .attention)
         }
         engine.onSearchStart = { [weak session] needle in
             guard let session else { return }

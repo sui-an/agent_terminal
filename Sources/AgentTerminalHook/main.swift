@@ -141,6 +141,17 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "env" {
             agent: agent
         ) else { exit(0) }
         payloadObject = tool
+        // PreToolUse also triggers attention so the user gets notified when
+        // Claude pauses for a permission prompt mid-turn. Send a separate
+        // lifecycle payload after the tool payload.
+        if event == "PreToolUse" {
+            let attentionPayload = AgentTerminalHookKit.buildLifecyclePayload(
+                agent: agent,
+                event: "attention",
+                surface: surface
+            )
+            _ = AgentTerminalHookKit.sendPayload(attentionPayload, to: socketPath)
+        }
     } else {
         payloadObject = AgentTerminalHookKit.buildLifecyclePayload(
             agent: agent,

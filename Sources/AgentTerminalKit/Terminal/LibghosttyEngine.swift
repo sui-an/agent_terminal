@@ -145,6 +145,9 @@ private let agentterminalActionCb: ghostty_runtime_action_cb = { _, target, acti
         guard exit == 0 else { return false }
         dispatchToView(userdata) { $0.onProcessExitedCleanly?() }
         return true
+    case GHOSTTY_ACTION_RING_BELL:
+        dispatchToView(userdata) { $0.onBell?() }
+        return true
     case GHOSTTY_ACTION_COMMAND_FINISHED:
         // Shell emitted `OSC 133;D[;exit]` — last command done. exit=-1 means
         // the shell omitted the field; pass `nil` upward so the UI can pick a
@@ -330,6 +333,10 @@ final class LibghosttyEngine: TerminalEngine {
         get { surfaceView.onProcessExitedCleanly }
         set { surfaceView.onProcessExitedCleanly = newValue }
     }
+    var onBell: (() -> Void)? {
+        get { surfaceView.onBell }
+        set { surfaceView.onBell = newValue }
+    }
     var onSearchStart: ((String) -> Void)? {
         get { surfaceView.onSearchStart }
         set { surfaceView.onSearchStart = newValue }
@@ -459,6 +466,7 @@ final class GhosttySurfaceView: NSView {
     var onCommandFinished: ((Int?, TimeInterval) -> Void)?
     var onUserInput: (() -> Void)?
     var onProcessExitedCleanly: (() -> Void)?
+    var onBell: (() -> Void)?
     var onSearchStart: ((String) -> Void)?
     var onSearchEnd: (() -> Void)?
     var onSearchTotal: ((Int) -> Void)?
