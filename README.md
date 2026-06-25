@@ -25,7 +25,7 @@ Highlights:
 
 **Vertical tabs, splits, multiple windows.** Manage every workspace from the sidebar, with three switchable widths (`⌘⌃S`). Each pane has its own tab strip and active tab — split right or down with the two buttons on the right of the tab strip, or ⌘D / ⌘⇧D. ⌘R renames a tab, ⌘⇧R renames a workspace. `⌘⇧N` opens a new window. Tabs can be reordered by drag, moved across panes, and dragged into another window — the live session comes along whole, with scrollback and running processes intact. State is restored automatically on relaunch, and every open window is brought back. Open any folder as a new workspace: drag it from Finder onto the sidebar, or press ⌘O. Press `⌘⇧E` to zoom the current pane to fill the workspace, and again to restore — the other panes slide out of view but keep running.
 
-**Launch agents with one click.** Claude Code · Codex · MimoCode · Gemini CLI · OpenCode · Amp · Cursor CLI · Copilot CLI · Grok Build · Antigravity CLI · Kimi Code · Pi · Kiro CLI.
+**Launch agents with one click.** Claude Code · Codex · MiMoCode · Gemini CLI · OpenCode · Amp · Cursor CLI · Copilot CLI · Grok Build · Antigravity CLI · Kimi Code · Pi · Kiro CLI.
 
 **Git worktrees.** Right-click any git workspace → "Create Worktree…" to spin up a worktree on a new branch (or check out an existing one). Worktrees show indented under their source repo in the sidebar, each with its own tabs + agent — let Claude work on a feature branch without disturbing the processes running on main. Worktrees created from the command line with `git worktree add` also show up in the sidebar on the next AgentTerminal launch.
 

@@ -66,7 +66,7 @@ Common agent aliases:
 - `codex` → Codex
 - `opencode` → OpenCode
 - `gemini` → Gemini CLI
-- `mimo` / `mimocode` → MimoCode
+- `mimo` / `mimocode` → MiMoCode
 - `pi` → Pi
 
 ### Step 3: Execute Forwarding
@@ -96,7 +96,7 @@ User: "让mimo继续完成这个功能"
 
 Your action:
 1. Execute: `agentforward claude mimo "请继续完成这个功能"`
-2. Report: "已将任务转发给 MimoCode 继续完成"
+2. Report: "已将任务转发给 MiMoCode 继续完成"
 
 User: "给codex检查一下代码"
 

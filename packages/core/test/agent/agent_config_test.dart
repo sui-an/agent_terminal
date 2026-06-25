@@ -5,12 +5,12 @@ void main() {
   test('AgentConfig should parse from JSON', () {
     final json = {
       'id': 'mimocode',
-      'name': 'MimoCode',
+      'name': 'MiMoCode',
       'command': 'mimocode',
     };
     final config = AgentConfig.fromJson(json);
     expect(config.id, 'mimocode');
-    expect(config.name, 'MimoCode');
+    expect(config.name, 'MiMoCode');
   });
 
   test('AgentConfig should parse agents.json', () {

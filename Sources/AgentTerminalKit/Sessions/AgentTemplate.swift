@@ -434,12 +434,12 @@ extension AgentTemplate {
         initialCommand: "kiro-cli"
     )
 
-    /// MimoCode — AI coding assistant; binary `mimo`. Bracket wrapper with
+    /// MiMoCode — AI coding assistant; binary `mimo`. Bracket wrapper with
     /// OSC 9/99/777 status detection. Supports resume via `--resume` flag.
     /// Reports tool calls for activity tracking.
     static let mimocode = AgentTemplate(
         id: "mimocode",
-        title: "MimoCode",
+        title: "MiMoCode",
         symbol: "sparkles",
         iconAsset: "mimocode",
         tintHex: "FF6B6B",

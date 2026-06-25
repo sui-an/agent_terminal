@@ -7,7 +7,7 @@ class AgentConfigManager {
 
   AgentConfigManager() {
     _agents.addAll([
-      AgentConfig(id: 'mimocode', name: 'MimoCode', command: 'mimocode',
+      AgentConfig(id: 'mimocode', name: 'MiMoCode', command: 'mimocode',
           args: ['--agent'], statusDetection: StatusDetectionConfig(method: 'osc', oscCodes: [9, 99, 777])),
       AgentConfig(id: 'claude-code', name: 'Claude Code', command: 'claude',
           statusDetection: StatusDetectionConfig(method: 'osc', oscCodes: [9, 99, 777])),
