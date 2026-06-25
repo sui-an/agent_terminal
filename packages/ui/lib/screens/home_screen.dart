@@ -167,6 +167,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final selectedTabId = ref.read(selectedTabIdProvider);
 
     String currentAgentName = 'Terminal';
+    String? currentAgentId;
     if (selectedWsId != null && selectedTabId != null) {
       final ws = workspaces.where((w) => w.id == selectedWsId).firstOrNull;
       if (ws != null) {
@@ -174,6 +175,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (tab?.agentId != null) {
           final agent = AgentConfigManager().getAgentById(tab!.agentId!);
           currentAgentName = agent?.name ?? 'Terminal';
+          currentAgentId = tab.agentId;
         }
       }
     }
@@ -182,6 +184,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return TerminalPane(
         sessionId: 1,
         agentName: currentAgentName,
+        agentId: currentAgentId,
         onSplit: (direction) {
           setState(() {
             _splitHorizontal = direction == 'horizontal';
@@ -195,6 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Widget result = TerminalPane(
       sessionId: 1,
       agentName: '$currentAgentName 1',
+      agentId: currentAgentId,
       onSplit: (direction) {
         setState(() {
           _splitHorizontal = direction == 'horizontal';
@@ -215,6 +219,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child2: TerminalPane(
           sessionId: index + 1,
           agentName: 'Terminal',
+          agentId: null,
           onSplit: (direction) {
             setState(() {
               _splitHorizontal = direction == 'horizontal';

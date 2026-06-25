@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../common/smart_tooltip.dart';
 import '../common/split_icon.dart';
+import '../../agent_icon.dart';
 import 'terminal_view.dart';
 
 class TerminalPane extends StatefulWidget {
   final int sessionId;
   final String? agentName;
+  final String? agentId;
   final Function(String direction)? onSplit;
   final VoidCallback? onClose;
 
@@ -13,6 +15,7 @@ class TerminalPane extends StatefulWidget {
     super.key,
     required this.sessionId,
     this.agentName,
+    this.agentId,
     this.onSplit,
     this.onClose,
   });
@@ -81,7 +84,7 @@ class _TerminalPaneState extends State<TerminalPane> {
             ),
             child: Row(
               children: [
-                Container(width: 6, height: 6, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle)),
+                AgentIcon.getIcon(widget.agentId, size: 12),
                 const SizedBox(width: 6),
                 Text(widget.agentName!, style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color)),
               ],

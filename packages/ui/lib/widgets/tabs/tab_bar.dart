@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:core/workspace/workspace_state.dart';
 import 'package:ui/theme/app_theme.dart';
 import '../common/smart_tooltip.dart';
+import '../../agent_icon.dart';
 
 class TabBarWidget extends StatelessWidget {
   final List<TabState> tabs;
@@ -49,7 +50,11 @@ class TabBarWidget extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Row(
                       children: [
-                        Icon(Icons.terminal, size: 12, color: sel ? AppTheme.accent : AppTheme.textSecondary),
+                        AgentIcon.getIcon(
+                          tab.agentId,
+                          size: 12,
+                          color: sel ? AppTheme.accent : AppTheme.textSecondary,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(tab.title, style: TextStyle(fontSize: 12, color: sel ? AppTheme.text : AppTheme.textSecondary), overflow: TextOverflow.ellipsis),

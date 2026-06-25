@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:core/workspace/workspace_state.dart';
+import '../../agent_icon.dart';
 
 class WorkspaceTile extends StatelessWidget {
   final WorkspaceState workspace;
@@ -19,6 +20,8 @@ class WorkspaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeAgentId = workspace.tabs.isNotEmpty ? workspace.tabs.first.agentId : null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
@@ -33,8 +36,8 @@ class WorkspaceTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
-                Icon(
-                  Icons.folder,
+                AgentIcon.getIcon(
+                  activeAgentId,
                   size: 16,
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
