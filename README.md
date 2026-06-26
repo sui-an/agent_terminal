@@ -104,5 +104,14 @@ swift test                           # unit tests
 ./scripts/build-dmg.sh --build       # produces dist/AgentTerminal-vX.Y.Z.dmg
 ```
 
+## Community
+
+Join our AI Agent user communication QQ group:
+
+- **QQ Group**: 165034070 (OpenCode/ClaudeCode/AgentTerminal)
+- Scan the QR code below to join:
+
+<img src="./Sources/AgentTerminalKit/Resources/Img/qq-group-qr.jpg" width="200" alt="QQ Group QR Code">
+
 ## License
 MIT
