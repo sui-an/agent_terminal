@@ -260,6 +260,10 @@ final class GhosttyDrawCoordinator {
         register(view, priority: priority)
     }
 
+    func isRegistered(_ view: GhosttySurfaceView) -> Bool {
+        activeSurfaces.contains(view) || throttledSurfaces.contains(view)
+    }
+
     private func ensureTimers() {
         if drawTimer == nil && !activeSurfaces.allObjects.isEmpty {
             let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -387,6 +391,11 @@ final class LibghosttyEngine: TerminalEngine {
 
     func flushSize() {
         surfaceView.flushPropagateSize()
+    }
+
+    func focusSurface() {
+        guard let window = surfaceView.window else { return }
+        window.makeFirstResponder(surfaceView)
     }
 
     @discardableResult
@@ -608,6 +617,8 @@ final class GhosttySurfaceView: NSView {
         if window != nil {
             let reattaching = surface != nil
             createSurfaceIfReady()
+            // Always re-register — SwiftUI's rebuild cycle may have unregistered us.
+            GhosttyDrawCoordinator.shared.register(self, priority: grabsFocusOnMount ? .active : .visible)
             DispatchQueue.main.async { [weak self] in
                 guard let self, let window = self.window else { return }
                 if self.grabsFocusOnMount {
@@ -615,9 +626,10 @@ final class GhosttySurfaceView: NSView {
                 }
                 if reattaching { self.propagateSizeToSurface() }
             }
-        } else {
-            GhosttyDrawCoordinator.shared.unregister(self)
         }
+        // Do NOT unregister here — SwiftUI's rebuild cycle temporarily sets
+        // window=nil during tab moves, which would kill the draw coordinator
+        // registration. The coordinator handles orphaned surfaces fine.
     }
 
     func createSurfaceIfReady() {
@@ -703,6 +715,10 @@ final class GhosttySurfaceView: NSView {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        let registered = GhosttyDrawCoordinator.shared.isRegistered(self)
+        if surface != nil, window != nil, !registered {
+            GhosttyDrawCoordinator.shared.register(self, priority: grabsFocusOnMount ? .active : .visible)
+        }
         if suspendsSizePropagation { return }
         resizeWorkItem?.cancel()
         let prevSize = self.frame.size

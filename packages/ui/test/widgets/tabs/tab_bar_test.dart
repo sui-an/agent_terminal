@@ -15,6 +15,7 @@ void main() {
         body: TabBarWidget(
           tabs: tabs,
           selectedTabId: 'tab-1',
+          panelId: 'panel-1',
           onTabSelected: (_) {},
           onTabClosed: (_) {},
         ),

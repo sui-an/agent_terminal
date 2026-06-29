@@ -36,7 +36,7 @@ class PersistenceService {
       if (await file.exists()) {
         final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
         final workspaces = (json['workspaces'] as List)
-            .map((w) => WorkspaceState.fromJson(w as Map<String, dynamic>))
+            .map((w) => _migrateWorkspace(w as Map<String, dynamic>))
             .toList();
         return workspaces;
       }
@@ -44,5 +44,36 @@ class PersistenceService {
       print('Warning: Failed to load workspaces: $e');
     }
     return [];
+  }
+
+  static WorkspaceState _migrateWorkspace(Map<String, dynamic> json) {
+    final ws = WorkspaceState.fromJson(json);
+    if (ws.panels.isNotEmpty) return ws;
+    final oldTabs = json['tabs'] as List?;
+    if (oldTabs != null && oldTabs.isNotEmpty) {
+      final tabs = oldTabs
+          .map((t) => TabState.fromJson(t as Map<String, dynamic>))
+          .toList();
+      final firstTabId = tabs.first.id;
+      return ws.copyWith(
+        panels: [
+          PanelState(
+            id: '${ws.id}-panel-1',
+            tabs: tabs,
+            selectedTabId: firstTabId,
+          ),
+        ],
+      );
+    }
+    final tabId = 'tab-${DateTime.now().millisecondsSinceEpoch}';
+    return ws.copyWith(
+      panels: [
+        PanelState(
+          id: '${ws.id}-panel-1',
+          tabs: [TabState(id: tabId, title: 'Terminal 1')],
+          selectedTabId: tabId,
+        ),
+      ],
+    );
   }
 }

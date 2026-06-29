@@ -479,32 +479,47 @@ private struct DraggableWorkspaceRow: View {
 }
 
 /// Draggable handle on the right edge of the sidebar for resizing.
+///
+/// During a drag the sidebar width is NOT changed live — that re-lays out the
+/// whole HStack every frame and the terminal NSView jitters. Instead a guide
+/// line (a top-level NSView, above libghostty's Metal layer — see
+/// `SidebarResizeGuideView`) tracks the cursor, and the new width is committed
+/// once on release.
 struct SidebarResizeHandle: View {
     @Bindable var store: WorkspaceStore
     @State private var isHovering = false
     @State private var isDragging = false
     @State private var dragStartWidth: CGFloat = 0
-    /// Horizontal displacement of the drag guide line from the handle's
-    /// resting position. Only this line moves during the drag; the sidebar
-    /// width is committed once on release to avoid live re-layout jitter.
-    @State private var guideOffset: CGFloat = 0
+    /// Handle's left edge x in window-content coords, captured via GeometryReader
+    /// so the guide line (positioned in the same coord space) can follow the
+    /// cursor's absolute x rather than a delta.
+    @State private var handleMinX: CGFloat = 0
 
     private let minWidth: CGFloat = 160
     private let maxWidth: CGFloat = 400
 
     var body: some View {
         Rectangle()
-            .fill(isHovering || isDragging ? Theme.chromeMuted.opacity(0.3) : Color.clear)
-            .frame(width: 6)
+            .fill(Color.clear)
+            .frame(width: 4)
             .overlay {
-                if isDragging {
+                // Resting/hover indicator only. The moving line during a drag is
+                // the top-level guide NSView, not this.
+                if isHovering || isDragging {
                     Rectangle()
-                        .fill(Theme.chromeActive)
+                        .fill(isDragging ? Theme.chromeActive : Theme.chromeMuted.opacity(0.3))
                         .frame(width: 2)
-                        .offset(x: guideOffset)
                         .allowsHitTesting(false)
                 }
             }
+            .contentShape(Rectangle())
+            .background(
+                GeometryReader { geo in
+                    Color.clear.onChange(of: geo.frame(in: .global).minX, initial: true) { _, x in
+                        handleMinX = x
+                    }
+                }
+            )
             .onHover { hovered in
                 isHovering = hovered
                 if hovered {
@@ -520,6 +535,7 @@ struct SidebarResizeHandle: View {
                     NSCursor.pop()
                     isHovering = false
                 }
+                store.showSidebarResizeGuide?(nil)
             }
             .gesture(
                 DragGesture(minimumDistance: 1)
@@ -528,31 +544,23 @@ struct SidebarResizeHandle: View {
                             isDragging = true
                             dragStartWidth = (store.sidebarWidth ?? SidebarView.fullWidth).rounded()
                         }
-                        // Move only the guide line; clamp so it stops at the
-                        // width bounds even as the cursor keeps moving.
-                        let target = clampedWidth(dragStartWidth + value.translation.width)
-                        guideOffset = target - dragStartWidth
+                        // Clamp the guide to the width bounds, then map to an
+                        // absolute x: handle origin minus the start width gives
+                        // the sidebar's left edge, plus the clamped width is the
+                        // edge the guide should sit on.
+                        let width = clampedWidth(dragStartWidth + value.translation.width)
+                        let sidebarLeft = handleMinX - dragStartWidth
+                        store.showSidebarResizeGuide?(sidebarLeft + width)
                     }
                     .onEnded { value in
-                        let target = clampedWidth(dragStartWidth + value.translation.width)
                         isDragging = false
-                        guideOffset = 0
-                        commitSidebarWidth(target)
+                        store.showSidebarResizeGuide?(nil)
+                        store.sidebarWidth = clampedWidth(dragStartWidth + value.translation.width)
                     }
             )
     }
 
     private func clampedWidth(_ width: CGFloat) -> CGFloat {
         min(max(width, minWidth), maxWidth).rounded()
-    }
-
-    private func commitSidebarWidth(_ width: CGFloat) {
-        let current = (store.sidebarWidth ?? SidebarView.fullWidth).rounded()
-        guard current != width else { return }
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
-            store.sidebarWidth = width
-        }
     }
 }

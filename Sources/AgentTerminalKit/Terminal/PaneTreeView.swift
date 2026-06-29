@@ -34,6 +34,10 @@ private struct PaneView: View {
 
     @State private var contextMenuOpen = false
     @State private var contextMenuAnchor: UnitPoint = .center
+    @State private var panelDropActive = false
+    @State private var panelDropSide: DropSide = .none
+
+    enum DropSide { case none, left, right, top, bottom }
     /// Bumped on each status-bar visibility transition so rapid back-to-back
     /// toggles don't have an earlier restore Task prematurely clear a still-
     /// in-flight suspension window. Same pattern as `WorkspaceStore.toggleZoom`
@@ -48,15 +52,7 @@ private struct PaneView: View {
             TabBarView(pane: pane, workspace: workspace, store: store)
             Rectangle().fill(Theme.chromeHairline).frame(height: 1)
             if let active = pane.activeTab {
-                ZStack {
-                    ForEach(pane.tabs) { tab in
-                        let isActive = tab.id == pane.activeTabId
-                        TerminalView(engine: tab.engine, grabsFocusOnMount: isActive && isFocused)
-                            .opacity(isActive ? 1 : 0)
-                            .allowsHitTesting(isActive)
-                            .accessibilityHidden(!isActive)
-                    }
-                }
+                PaneSurfaceHost(pane: pane, isFocused: isFocused)
                 .padding(8)
                     .overlay(RightClickCatcher { unit in
                         // Promote this pane to the workspace's active one —
@@ -113,6 +109,38 @@ private struct PaneView: View {
         }
         .opacity(paneOpacity)
         .animation(Theme.chromeTransition, value: isFocused)
+        .overlay {
+            if panelDropActive {
+                GeometryReader { g in
+                    let w = g.size.width, h = g.size.height
+                    let c = Color.accentColor.opacity(0.15)
+                    let border = Color.accentColor.opacity(0.5)
+                    let half = w * 0.45
+                    let halfH = h * 0.45
+                    if panelDropSide == .left {
+                        RoundedRectangle(cornerRadius: 6).fill(c).stroke(border, lineWidth: 1.5)
+                            .frame(width: half, height: h).position(x: half / 2, y: h / 2)
+                    }
+                    if panelDropSide == .right {
+                        RoundedRectangle(cornerRadius: 6).fill(c).stroke(border, lineWidth: 1.5)
+                            .frame(width: half, height: h).position(x: w - half / 2, y: h / 2)
+                    }
+                    if panelDropSide == .top {
+                        RoundedRectangle(cornerRadius: 6).fill(c).stroke(border, lineWidth: 1.5)
+                            .frame(width: w, height: halfH).position(x: w / 2, y: halfH / 2)
+                    }
+                    if panelDropSide == .bottom {
+                        RoundedRectangle(cornerRadius: 6).fill(c).stroke(border, lineWidth: 1.5)
+                            .frame(width: w, height: halfH).position(x: w / 2, y: h - halfH / 2)
+                    }
+                }.allowsHitTesting(false)
+            }
+        }
+        .contentShape(Rectangle())
+        .onDrop(of: [.text], delegate: PaneZoneDrop(
+            pane: pane, workspace: workspace, store: store,
+            active: $panelDropActive, side: $panelDropSide
+        ))
         .onChange(of: pane.activeTab.map { paneStatusBarHasData(session: $0) } ?? false) { _, _ in
             // Status-bar height transition. The bar is always present now (it
             // hosts the compose button), so this fires when its CONTENT height
@@ -1338,5 +1366,100 @@ private struct DividerHandle: View {
                     NSCursor.pop()
                 }
             }
+    }
+}
+
+// MARK: - Panel Zone Drop Delegate
+
+private final class PaneZoneDrop: NSObject, DropDelegate, @unchecked Sendable {
+    let pane: Pane
+    let workspace: Workspace
+    let store: WorkspaceStore
+    let active: Binding<Bool>
+    let side: Binding<PaneView.DropSide>
+
+    init(pane: Pane, workspace: Workspace, store: WorkspaceStore,
+         active: Binding<Bool>, side: Binding<PaneView.DropSide>) {
+        self.pane = pane; self.workspace = workspace
+        self.store = store; self.active = active; self.side = side
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { active.wrappedValue = false; side.wrappedValue = .none }
+        guard let item = info.itemProviders(for: [.text]).first else { return false }
+        let dropSide = side.wrappedValue
+        let group = DispatchGroup()
+        nonisolated(unsafe) var result = false
+        group.enter()
+        item.loadDataRepresentation(forTypeIdentifier: "public.plain-text") { data, _ in
+            defer { group.leave() }
+            guard let data, let s = String(data: data, encoding: .utf8),
+                  let id = UUID(uuidString: s) else { return }
+            DispatchQueue.main.async { result = self.apply(id: id, side: dropSide) }
+        }
+        group.wait()
+        return result
+    }
+
+    func dropEntered(info: DropInfo) {
+        active.wrappedValue = true
+        side.wrappedValue = classify(info)
+    }
+    func dropExited(info: DropInfo) {
+        active.wrappedValue = false
+        side.wrappedValue = .none
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        side.wrappedValue = classify(info)
+        return DropProposal(operation: .move)
+    }
+    func validateDrop(info: DropInfo) -> Bool {
+        info.itemProviders(for: [.text]).first?.hasItemConformingToTypeIdentifier("public.plain-text") ?? false
+    }
+
+    private func classify(_ info: DropInfo) -> PaneView.DropSide {
+        let loc = info.location
+        let margin: CGFloat = 40
+        if loc.x < margin { return .left }
+        if loc.y < margin { return .top }
+        // Estimate panel height from the drop location
+        // If cursor is near the bottom edge of the panel, treat as bottom
+        // Use a generous threshold since we can't easily get the panel height here
+        if loc.y > 200 { return .bottom }
+        return .right
+    }
+
+    private func apply(id: UUID, side: PaneView.DropSide) -> Bool {
+        guard let session = workspace.root.allPanes.lazy.compactMap({ $0.tabs.first { $0.id == id } }).first,
+              let sourcePane = workspace.root.pane(containingSessionId: id) else { return false }
+        let orientation: SplitOrientation = (side == .left || side == .right) ? .horizontal : .vertical
+
+        if sourcePane.id == pane.id {
+            // Same pane: if only one tab, can't split (nothing to separate)
+            guard sourcePane.tabs.count > 1 else { return false }
+            // Split this pane: keep other tabs here, move dragged tab to new pane
+            guard let leafNode = workspace.root.paneNode(paneId: pane.id),
+                  case .pane(let existing) = leafNode.content else { return false }
+            if let srcIdx = sourcePane.tabs.firstIndex(where: { $0.id == id }) {
+                store.detachSessionPublic(session, from: sourcePane, at: srcIdx, in: workspace)
+            }
+            let newPane = Pane(tabs: [session], activeTabId: session.id)
+            leafNode.content = .split(orientation: orientation, first: PaneNode(pane: existing), second: PaneNode(pane: newPane), fraction: 0.5)
+            workspace.activePaneId = newPane.id
+            if workspace.zoomedPaneId != nil { workspace.zoomedPaneId = nil }
+            return true
+        }
+
+        // Cross-pane: split destination and move session there
+        guard let leafNode = workspace.root.paneNode(paneId: pane.id),
+              case .pane(let existing) = leafNode.content else { return false }
+        if let srcIdx = sourcePane.tabs.firstIndex(where: { $0.id == id }) {
+            store.detachSessionPublic(session, from: sourcePane, at: srcIdx, in: workspace)
+        }
+        let newPane = Pane(tabs: [session], activeTabId: session.id)
+        leafNode.content = .split(orientation: orientation, first: PaneNode(pane: existing), second: PaneNode(pane: newPane), fraction: 0.5)
+        workspace.activePaneId = newPane.id
+        if workspace.zoomedPaneId != nil { workspace.zoomedPaneId = nil }
+        return true
     }
 }

@@ -16,7 +16,11 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 if store.sidebarMode != .hidden {
                     SidebarView(store: store)
-                    SidebarResizeHandle(store: store)
+                    // Width is only adjustable in .full mode — .compact is pinned
+                    // to a fixed 52pt rail, so no resize handle there.
+                    if store.sidebarMode == .full {
+                        SidebarResizeHandle(store: store)
+                    }
                     Rectangle().fill(Theme.chromeHairline).frame(width: 1)
                 }
                 mainPane

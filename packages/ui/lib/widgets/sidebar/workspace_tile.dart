@@ -20,7 +20,9 @@ class WorkspaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeAgentId = workspace.tabs.isNotEmpty ? workspace.tabs.first.agentId : null;
+    final activeAgentId = workspace.panels.isNotEmpty && workspace.panels.first.tabs.isNotEmpty
+        ? workspace.panels.first.tabs.first.agentId
+        : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),

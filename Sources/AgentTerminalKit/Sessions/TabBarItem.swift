@@ -145,7 +145,8 @@ struct TabBarItem: View {
                 RoundedRectangle(cornerRadius: TabBarMetrics.tabCornerRadius)
                     .stroke(isActive ? Theme.chromeHairline : Color.clear, lineWidth: 1)
             }
-            .animation(Theme.chromeTransition, value: isActive)
+            // No animation on isActive — the selected style snaps in instantly
+            // so a tab click feels immediate. Hover keeps the soft transition.
             .animation(Theme.chromeTransition, value: isHovered)
     }
 

@@ -94,6 +94,8 @@ protocol TerminalEngine: AnyObject {
     /// Force a one-shot size sync of the surface to the current view
     /// frame. Used when un-suspending after an animation.
     func flushSize()
+    /// Make the surface the window's first responder so keystrokes go to it.
+    func focusSurface()
     /// Trigger a libghostty named action (e.g. `increase_font_size:1`,
     /// `decrease_font_size:1`, `reset_font_size`, `clear_screen`). Returns
     /// `true` when the engine recognised and dispatched the action.

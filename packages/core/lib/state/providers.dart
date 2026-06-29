@@ -40,61 +40,97 @@ class WorkspaceNotifier extends StateNotifier<List<WorkspaceState>> {
     _persist();
   }
 
-  void addTab(String workspaceId, TabState tab) {
+  void addPanel(String wsId, PanelState panel) {
     state = state.map((w) {
-      if (w.id == workspaceId) {
-        return WorkspaceState(
-          id: w.id,
-          name: w.name,
-          path: w.path,
-          createdAt: w.createdAt,
-          updatedAt: DateTime.now(),
-          tabs: [...w.tabs, tab],
-        );
+      if (w.id == wsId) {
+        return w.copyWith(panels: [...w.panels, panel]);
       }
       return w;
     }).toList();
     _persist();
   }
 
-  void removeTab(String workspaceId, String tabId) {
+  void removePanel(String wsId, String panelId) {
     state = state.map((w) {
-      if (w.id == workspaceId) {
-        return WorkspaceState(
-          id: w.id,
-          name: w.name,
-          path: w.path,
-          createdAt: w.createdAt,
-          updatedAt: DateTime.now(),
-          tabs: w.tabs.where((t) => t.id != tabId).toList(),
+      if (w.id == wsId) {
+        final matches = w.panels.where((p) => p.id == panelId).toList();
+        if (matches.isEmpty) return w;
+        final target = matches.first;
+        final remaining = w.panels.where((p) => p.id != panelId).toList();
+        if (remaining.isEmpty) {
+          final merged = PanelState(
+            id: 'default',
+            tabs: target.tabs,
+            selectedTabId: target.selectedTabId,
+          );
+          return w.copyWith(panels: [merged], splitDirection: null);
+        }
+        final last = remaining.last;
+        remaining[remaining.length - 1] = last.copyWith(
+          tabs: [...last.tabs, ...target.tabs],
+          selectedTabId: last.selectedTabId ?? target.selectedTabId,
         );
+        return w.copyWith(panels: remaining, splitDirection: null);
       }
       return w;
     }).toList();
     _persist();
   }
 
-  void updateTab(String workspaceId, String tabId, {String? title}) {
+  void updatePanel(String wsId, String panelId,
+      {List<TabState>? tabs, String? selectedTabId}) {
     state = state.map((w) {
-      if (w.id == workspaceId) {
-        return WorkspaceState(
-          id: w.id,
-          name: w.name,
-          path: w.path,
-          createdAt: w.createdAt,
-          updatedAt: DateTime.now(),
-          tabs: w.tabs.map((t) {
-            if (t.id == tabId) {
-              return TabState(
-                id: t.id,
-                title: title ?? t.title,
-                agentId: t.agentId,
-                workingDirectory: t.workingDirectory,
-              );
-            }
-            return t;
-          }).toList(),
-        );
+      if (w.id == wsId) {
+        final updated = w.panels.map((p) {
+          if (p.id == panelId) {
+            return p.copyWith(tabs: tabs, selectedTabId: selectedTabId);
+          }
+          return p;
+        }).toList();
+        return w.copyWith(panels: updated);
+      }
+      return w;
+    }).toList();
+    _persist();
+  }
+
+  void setSplitConfig(String wsId, {String? direction, double? ratio}) {
+    state = state.map((w) {
+      if (w.id == wsId) {
+        return w.copyWith(splitDirection: direction, splitRatio: ratio);
+      }
+      return w;
+    }).toList();
+    _persist();
+  }
+
+  void moveTabBetweenPanels(String wsId, String fromPanelId, String toPanelId,
+      String tabId, {int? insertIndex}) {
+    state = state.map((w) {
+      if (w.id == wsId) {
+        PanelState? fromPanel;
+        List<PanelState> panels = w.panels.map((p) {
+          if (p.id == fromPanelId) {
+            fromPanel = p;
+            return p.copyWith(
+                tabs: p.tabs.where((t) => t.id != tabId).toList());
+          }
+          return p;
+        }).toList();
+        if (fromPanel == null) return w;
+        final tabMatches = fromPanel!.tabs.where((t) => t.id == tabId).toList();
+        if (tabMatches.isEmpty) return w;
+        final tab = tabMatches.first;
+        panels = panels.map((p) {
+          if (p.id == toPanelId) {
+            final newTabs = List<TabState>.from(p.tabs);
+            final idx = (insertIndex ?? newTabs.length).clamp(0, newTabs.length);
+            newTabs.insert(idx, tab);
+            return p.copyWith(tabs: newTabs);
+          }
+          return p;
+        }).toList();
+        return w.copyWith(panels: panels);
       }
       return w;
     }).toList();

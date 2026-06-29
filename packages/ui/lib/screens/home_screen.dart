@@ -20,9 +20,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _sidebarVisible = true;
   bool _notifVisible = false;
-  bool _splitHorizontal = false;
-  int _splitCount = 1;
   double _sidebarWidth = 220;
+  String? _selectedPanelId;
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +35,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ? workspaces.where((w) => w.id == selectedWsId).firstOrNull ?? workspaces.firstOrNull
         : null;
 
+    _selectedPanelId = _resolvePanelId(ws);
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          // ── Title Bar ──
           Container(
             height: 28,
             decoration: BoxDecoration(
@@ -49,17 +49,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             child: Row(
               children: [
-                const SizedBox(width: 70), // traffic lights spacer
+                const SizedBox(width: 70),
                 Text('AgentTerminal', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                 const Spacer(),
-                // Sidebar toggle (right side)
                 _SmallBtn(
                   icon: _sidebarVisible ? Icons.menu_open : Icons.menu,
                   tooltip: _sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar',
                   onTap: () => setState(() => _sidebarVisible = !_sidebarVisible),
                 ),
                 const SizedBox(width: 4),
-                // Notification (right side)
                 _SmallBtn(
                   icon: Icons.notifications_outlined,
                   tooltip: 'Notifications',
@@ -69,11 +67,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
-          // ── Body ──
           Expanded(
             child: Row(
               children: [
-                // Sidebar with settings at bottom
                 if (_sidebarVisible)
                   _ResizableSidebar(
                     width: _sidebarWidth,
@@ -84,16 +80,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onWorkspaceSelected: (id) {
                         ref.read(selectedWorkspaceIdProvider.notifier).state = id;
                         final w = workspaces.where((x) => x.id == id).firstOrNull;
-                        if (w != null && w.tabs.isNotEmpty) {
-                          ref.read(selectedTabIdProvider.notifier).state = w.tabs.first.id;
+                        if (w != null && w.panels.isNotEmpty) {
+                          final firstPanel = w.panels.first;
+                          final firstTab = firstPanel.tabs.isNotEmpty ? firstPanel.tabs.first.id : null;
+                          ref.read(selectedTabIdProvider.notifier).state = firstTab;
+                          _selectedPanelId = firstPanel.id;
                         } else {
                           ref.read(selectedTabIdProvider.notifier).state = null;
+                          _selectedPanelId = null;
                         }
                       },
                       onWorkspaceCreated: (name, path) {
                         final id = 'ws-${DateTime.now().millisecondsSinceEpoch}';
-                        ref.read(workspaceProvider.notifier).addWorkspace(WorkspaceState(id: id, name: name, path: path));
+                        final tabId = 'tab-${DateTime.now().millisecondsSinceEpoch}';
+                        final ws = WorkspaceState(
+                          id: id,
+                          name: name,
+                          path: path,
+                          panels: [
+                            PanelState(
+                              id: '$id-panel-1',
+                              tabs: [TabState(id: tabId, title: 'Terminal 1')],
+                              selectedTabId: tabId,
+                            ),
+                          ],
+                        );
+                        ref.read(workspaceProvider.notifier).addWorkspace(ws);
                         ref.read(selectedWorkspaceIdProvider.notifier).state = id;
+                        ref.read(selectedTabIdProvider.notifier).state = tabId;
+                        _selectedPanelId = ws.panels.first.id;
                       },
                       onWorkspaceDeleted: (id) {
                         ref.read(workspaceProvider.notifier).removeWorkspace(id);
@@ -108,46 +123,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onSettings: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
                     ),
                   ),
-                // Main content
                 Expanded(
-                  child: Column(
-                    children: [
-                      // Tab bar
-                      TabBarWidget(
-                        tabs: ws?.tabs ?? [],
-                        selectedTabId: selectedTabId,
-                        onTabSelected: (id) => ref.read(selectedTabIdProvider.notifier).state = id,
-                        onTabClosed: (id) {
-                          if (ws != null) {
-                            ref.read(workspaceProvider.notifier).removeTab(ws.id, id);
-                            if (ref.read(selectedTabIdProvider) == id) {
-                              final rest = ws.tabs.where((t) => t.id != id).toList();
-                              ref.read(selectedTabIdProvider.notifier).state =
-                                  rest.isNotEmpty ? rest.first.id : null;
-                            }
-                          }
-                        },
-                        onNewTab: ws != null
-                            ? () {
-                                final tid = 'tab-${DateTime.now().millisecondsSinceEpoch}';
-                                ref.read(workspaceProvider.notifier).addTab(
-                                      ws.id,
-                                      TabState(id: tid, title: 'Terminal ${ws.tabs.length + 1}'),
-                                    );
-                                ref.read(selectedTabIdProvider.notifier).state = tid;
-                              }
-                            : null,
-                      ),
-                      // Terminal area
-                      Expanded(
-                        child: selectedTabId != null
-                            ? _buildTerminalContent()
-                            : _EmptyState(onCreate: () => _showCreateDialog(context)),
-                      ),
-                    ],
-                  ),
+                  child: _buildMainContent(ws),
                 ),
-                // Notification panel
                 if (_notifVisible)
                   NotificationPanel(
                     notifications: notifications,
@@ -161,79 +139,165 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildTerminalContent() {
-    final workspaces = ref.watch(workspaceProvider);
-    final selectedWsId = ref.read(selectedWorkspaceIdProvider);
-    final selectedTabId = ref.read(selectedTabIdProvider);
+  String? _resolvePanelId(WorkspaceState? ws) {
+    if (ws == null || ws.panels.isEmpty) return null;
+    if (_selectedPanelId != null && ws.panels.any((p) => p.id == _selectedPanelId)) {
+      return _selectedPanelId;
+    }
+    return ws.panels.first.id;
+  }
 
-    String currentAgentName = 'Terminal';
-    String? currentAgentId;
-    if (selectedWsId != null && selectedTabId != null) {
-      final ws = workspaces.where((w) => w.id == selectedWsId).firstOrNull;
-      if (ws != null) {
-        final tab = ws.tabs.where((t) => t.id == selectedTabId).firstOrNull;
-        if (tab?.agentId != null) {
-          final agent = AgentConfigManager().getAgentById(tab!.agentId!);
-          currentAgentName = agent?.name ?? 'Terminal';
-          currentAgentId = tab.agentId;
-        }
-      }
+  Widget _buildMainContent(WorkspaceState? ws) {
+    if (ws == null || ws.panels.isEmpty) {
+      return _EmptyState(onCreate: () => _showCreateDialog(context));
     }
 
-    if (_splitCount <= 1) {
-      return TerminalPane(
-        sessionId: 1,
-        agentName: currentAgentName,
-        agentId: currentAgentId,
-        onSplit: (direction) {
-          setState(() {
-            _splitHorizontal = direction == 'horizontal';
-            _splitCount = 2;
-          });
-        },
-        onClose: () {},
+    if (ws.panels.length == 1) {
+      return Column(
+        children: [
+          _buildTabBarForPanel(ws, ws.panels.first),
+          Expanded(child: _buildTerminalForPanel(ws, ws.panels.first)),
+        ],
       );
     }
 
-    Widget result = TerminalPane(
-      sessionId: 1,
-      agentName: '$currentAgentName 1',
-      agentId: currentAgentId,
-      onSplit: (direction) {
-        setState(() {
-          _splitHorizontal = direction == 'horizontal';
-          _splitCount = (_splitCount + 1).clamp(2, 4);
-        });
+    final panelWidgets = <Widget>[];
+    for (final panel in ws.panels) {
+      panelWidgets.add(Column(
+        children: [
+          _buildTabBarForPanel(ws, panel),
+          Expanded(child: _buildTerminalForPanel(ws, panel)),
+        ],
+      ));
+    }
+
+    final direction = ws.splitDirection == 'vertical'
+        ? SplitDirection.vertical
+        : SplitDirection.horizontal;
+
+    if (panelWidgets.length == 2) {
+      return SplitPane(
+        direction: direction,
+        initialRatio: ws.splitRatio,
+        child1: panelWidgets[0],
+        child2: panelWidgets[1],
+      );
+    }
+
+    Widget result = panelWidgets[0];
+    for (int i = 1; i < panelWidgets.length; i++) {
+      result = SplitPane(
+        direction: direction,
+        initialRatio: 1.0 / (i + 1),
+        child1: result,
+        child2: panelWidgets[i],
+      );
+    }
+    return result;
+  }
+
+  Widget _buildTabBarForPanel(WorkspaceState ws, PanelState panel) {
+    final selectedTabId = panel.selectedTabId ?? (panel.tabs.isNotEmpty ? panel.tabs.first.id : null);
+    return TabBarWidget(
+      tabs: panel.tabs,
+      selectedTabId: selectedTabId,
+      panelId: panel.id,
+      onTabSelected: (id) {
+        ref.read(selectedTabIdProvider.notifier).state = id;
+        ref.read(workspaceProvider.notifier).updatePanel(ws.id, panel.id, selectedTabId: id);
+        _selectedPanelId = panel.id;
       },
-      onClose: () {
-        setState(() => _splitCount = (_splitCount - 1).clamp(1, 4));
+      onTabClosed: (id) {
+        final remaining = panel.tabs.where((t) => t.id != id).toList();
+        final newSelected = selectedTabId == id
+            ? (remaining.isNotEmpty ? remaining.first.id : null)
+            : selectedTabId;
+        ref.read(workspaceProvider.notifier).updatePanel(ws.id, panel.id,
+            tabs: remaining, selectedTabId: newSelected);
+      },
+      onNewTab: () {
+        final tid = 'tab-${DateTime.now().millisecondsSinceEpoch}';
+        final newTab = TabState(id: tid, title: 'Terminal ${panel.tabs.length + 1}');
+        ref.read(workspaceProvider.notifier).updatePanel(ws.id, panel.id,
+            tabs: [...panel.tabs, newTab], selectedTabId: tid);
+      },
+      onTabSplit: (value) {
+        final parts = value.split(',');
+        if (parts.length < 2) return;
+        final sourcePanelId = parts[0];
+        final dir = parts[1] == 'vertical' ? SplitDirection.vertical : SplitDirection.horizontal;
+        if (sourcePanelId != panel.id) return;
+        _splitPanel(ws, panel, dir);
+      },
+      onClosePanel: () {
+        if (ws.panels.length > 1) {
+          ref.read(workspaceProvider.notifier).removePanel(ws.id, panel.id);
+        }
+      },
+      onTabMoved: (fromPanelId, toPanelId, tabId) {
+        ref.read(workspaceProvider.notifier).moveTabBetweenPanels(ws.id, fromPanelId, toPanelId, tabId);
+      },
+      onTabSplitByDrag: (fromPanelId, tabId, direction) {
+        final dir = direction == 'vertical' ? SplitDirection.vertical : SplitDirection.horizontal;
+        final tab = panel.tabs.where((t) => t.id == tabId).firstOrNull;
+        if (tab == null) return;
+        final remaining = panel.tabs.where((t) => t.id != tabId).toList();
+        final newPanelId = '${panel.id}-split-${DateTime.now().millisecondsSinceEpoch}';
+        final newPanel = PanelState(id: newPanelId, tabs: [tab], selectedTabId: tab.id);
+        final notifier = ref.read(workspaceProvider.notifier);
+        notifier.updatePanel(ws.id, panel.id,
+            tabs: remaining,
+            selectedTabId: remaining.isNotEmpty ? remaining.first.id : null);
+        notifier.addPanel(ws.id, newPanel);
+        notifier.setSplitConfig(ws.id, direction: dir.name);
       },
     );
+  }
 
-    for (int i = 1; i < _splitCount; i++) {
-      final index = i;
-      result = SplitPane(
-        direction: _splitHorizontal ? SplitDirection.horizontal : SplitDirection.vertical,
-        initialRatio: 1.0 / (index + 1),
-        child1: result,
-        child2: TerminalPane(
-          sessionId: index + 1,
-          agentName: 'Terminal',
-          agentId: null,
-          onSplit: (direction) {
-            setState(() {
-              _splitHorizontal = direction == 'horizontal';
-              _splitCount = (_splitCount + 1).clamp(2, 4);
-            });
-          },
-          onClose: () {
-            setState(() => _splitCount = (_splitCount - 1).clamp(1, 4));
-          },
-        ),
-      );
+  Widget _buildTerminalForPanel(WorkspaceState ws, PanelState panel) {
+    final selectedTabId = panel.selectedTabId ?? (panel.tabs.isNotEmpty ? panel.tabs.first.id : null);
+    if (selectedTabId == null) {
+      return _EmptyState(onCreate: () => _showCreateDialog(context));
     }
+    final tab = panel.tabs.where((t) => t.id == selectedTabId).firstOrNull;
+    String agentName = 'Terminal';
+    String? agentId;
+    if (tab?.agentId != null) {
+      final agent = AgentConfigManager().getAgentById(tab!.agentId!);
+      agentName = agent?.name ?? 'Terminal';
+      agentId = tab.agentId;
+    }
+    return TerminalPane(
+      sessionId: panel.id.hashCode & 0x7FFFFFFF,
+      agentName: agentName,
+      agentId: agentId,
+      onSplit: (direction) {
+        _splitPanel(ws, panel, direction == 'vertical' ? SplitDirection.vertical : SplitDirection.horizontal);
+      },
+      onClose: ws.panels.length > 1
+          ? () => ref.read(workspaceProvider.notifier).removePanel(ws.id, panel.id)
+          : null,
+    );
+  }
 
-    return result;
+  void _splitPanel(WorkspaceState ws, PanelState panel, SplitDirection direction) {
+    final currentTabId = panel.selectedTabId ?? (panel.tabs.isNotEmpty ? panel.tabs.first.id : null);
+    if (currentTabId == null) return;
+    final tab = panel.tabs.where((t) => t.id == currentTabId).firstOrNull;
+    if (tab == null) return;
+    final remaining = panel.tabs.where((t) => t.id != currentTabId).toList();
+    final newPanelId = '${panel.id}-split-${DateTime.now().millisecondsSinceEpoch}';
+    final newPanel = PanelState(
+      id: newPanelId,
+      tabs: [tab],
+      selectedTabId: tab.id,
+    );
+    final notifier = ref.read(workspaceProvider.notifier);
+    notifier.updatePanel(ws.id, panel.id,
+        tabs: remaining,
+        selectedTabId: remaining.isNotEmpty ? remaining.first.id : null);
+    notifier.addPanel(ws.id, newPanel);
+    notifier.setSplitConfig(ws.id, direction: direction.name);
   }
 
   void _showCreateDialog(BuildContext context) {
@@ -242,8 +306,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (_) => _CreateDialog(
         onCreated: (name, path) {
           final id = 'ws-${DateTime.now().millisecondsSinceEpoch}';
-          ref.read(workspaceProvider.notifier).addWorkspace(WorkspaceState(id: id, name: name, path: path));
+          final tabId = 'tab-${DateTime.now().millisecondsSinceEpoch}';
+          final ws = WorkspaceState(
+            id: id,
+            name: name,
+            path: path,
+            panels: [
+              PanelState(
+                id: '$id-panel-1',
+                tabs: [TabState(id: tabId, title: 'Terminal 1')],
+                selectedTabId: tabId,
+              ),
+            ],
+          );
+          ref.read(workspaceProvider.notifier).addWorkspace(ws);
           ref.read(selectedWorkspaceIdProvider.notifier).state = id;
+          ref.read(selectedTabIdProvider.notifier).state = tabId;
         },
       ),
     );
@@ -298,43 +376,44 @@ class _ResizableSidebarState extends State<_ResizableSidebar> {
               ),
             ),
           // Drag handle pinned to the right edge.
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: (_) =>
-                  setState(() => _dragWidth = widget.width),
-              onHorizontalDragUpdate: (details) {
-                setState(() {
-                  _dragWidth =
-                      (_dragWidth! + details.delta.dx).clamp(_minWidth, _maxWidth);
-                });
-              },
-              onHorizontalDragEnd: (_) {
-                final target = _dragWidth;
-                setState(() => _dragWidth = null);
-                if (target != null) widget.onWidthChanged(target);
-              },
-              onHorizontalDragCancel: () => setState(() => _dragWidth = null),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                child: SizedBox(
-                  width: 12,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      width: 2,
-                      color: _isDragging
-                          ? Colors.transparent
-                          : Theme.of(context).dividerColor,
+          if (widget.width > _minWidth && widget.width < _maxWidth)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: (_) =>
+                    setState(() => _dragWidth = widget.width),
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _dragWidth =
+                        (_dragWidth! + details.delta.dx).clamp(_minWidth, _maxWidth);
+                  });
+                },
+                onHorizontalDragEnd: (_) {
+                  final target = _dragWidth;
+                  setState(() => _dragWidth = null);
+                  if (target != null) widget.onWidthChanged(target);
+                },
+                onHorizontalDragCancel: () => setState(() => _dragWidth = null),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: SizedBox(
+                    width: 12,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        width: 2,
+                        color: _isDragging
+                            ? Colors.transparent
+                            : Theme.of(context).dividerColor,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

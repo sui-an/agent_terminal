@@ -73,6 +73,13 @@ final class WorkspaceStore {
     /// this to close its window — a window with zero workspaces is empty.
     var onBecameEmpty: (() -> Void)?
 
+    /// Drives the sidebar-resize guide line. The `SidebarResizeHandle` calls
+    /// this with the cursor's x (in window-content coords) during a drag and
+    /// `nil` on release. `AgentTerminalWindowController` wires it to a top-level
+    /// NSView so the line draws ABOVE libghostty's Metal layer — a SwiftUI guide
+    /// gets clipped by the terminal surface once it crosses the sidebar edge.
+    var showSidebarResizeGuide: ((CGFloat?) -> Void)?
+
     /// Mutate + schedule save. UI sites wrap in `withAnimation(Theme.chromeTransition)`.
     func setSidebarMode(_ mode: SidebarMode) {
         guard sidebarMode != mode else { return }
@@ -732,15 +739,36 @@ final class WorkspaceStore {
     }
 
     /// Move a tab from its current pane to a different pane at a specific
-    /// index. If the source pane runs out of tabs as a result, it collapses
-    /// (sibling pane takes its place in the split tree). The session itself
-    /// is preserved — same engine, same scrollback, same agent state.
+    /// index. Uses direct array manipulation to avoid triggering closePane's
+    /// tree restructuring, which can invalidate rendering in the destination.
     func moveTab(_ session: Session, to destPane: Pane, at destIndex: Int, in workspace: Workspace) {
         guard let sourcePane = workspace.root.pane(containingSessionId: session.id) else { return }
         if sourcePane.id == destPane.id { return }
         guard let sourceIndex = sourcePane.tabs.firstIndex(where: { $0.id == session.id }) else { return }
-        detachSession(session, from: sourcePane, at: sourceIndex, in: workspace)
+
+        // Remove from source directly (no detachSession to avoid closePane tree restructure)
+        sourcePane.tabs.remove(at: sourceIndex)
+        if sourcePane.tabs.isEmpty {
+            closePane(sourcePane, in: workspace)
+        } else if sourcePane.activeTabId == session.id {
+            sourcePane.activeTabId = sourcePane.tabs[min(sourceIndex, sourcePane.tabs.count - 1)].id
+            if workspace.activePaneId == sourcePane.id,
+               workspace.workingDirectory != sourcePane.activeTab?.currentDirectory {
+                workspace.workingDirectory = sourcePane.activeTab?.currentDirectory ?? workspace.workingDirectory
+            }
+        }
+        workspace.invalidateReadout()
+
+        // Insert into destination
         attachSession(session, to: destPane, at: destIndex, in: workspace)
+
+        // Force the engine to re-layout in its new container
+        session.engine.flushSize()
+    }
+
+    /// Public version of detachSession for use by PaneDropDelegate.
+    func detachSessionPublic(_ session: Session, from pane: Pane, at idx: Int, in workspace: Workspace) {
+        detachSession(session, from: pane, at: idx, in: workspace)
     }
 
     /// Removes `session` from `pane`. An emptied pane collapses — cascading
@@ -1017,6 +1045,26 @@ final class WorkspaceStore {
                 engine.flushSize()
             }
         }
+    }
+
+    /// Splits `pane` and moves `session` into the new pane. The source pane
+    /// keeps its remaining tabs; the new pane gets just the moved session.
+    /// Returns the new pane or nil on failure.
+    @discardableResult
+    func splitPaneMovingSession(_ session: Session, from sourcePane: Pane, orientation: SplitOrientation, in workspace: Workspace) -> Pane? {
+        guard let leafNode = workspace.root.paneNode(paneId: sourcePane.id) else { return nil }
+        guard case .pane(let existing) = leafNode.content else { return nil }
+        guard let srcIdx = sourcePane.tabs.firstIndex(where: { $0.id == session.id }) else { return nil }
+        // Remove from source first so the split sees the updated tab list.
+        detachSession(session, from: sourcePane, at: srcIdx, in: workspace)
+        let newPane = Pane(tabs: [session], activeTabId: session.id)
+        let firstChild = PaneNode(pane: existing)
+        let secondChild = PaneNode(pane: newPane)
+        leafNode.content = .split(orientation: orientation, first: firstChild, second: secondChild, fraction: 0.5)
+        workspace.activePaneId = newPane.id
+        if workspace.zoomedPaneId != nil { workspace.zoomedPaneId = nil }
+        scheduleSave()
+        return newPane
     }
 
     /// Splits `pane` in two. The existing pane stays as the first child of the

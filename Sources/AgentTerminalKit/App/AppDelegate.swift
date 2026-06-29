@@ -182,13 +182,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         var skillURL: URL?
         
         // Try main bundle first (for packaged app)
-        skillURL = Bundle.main.url(forResource: "SKILL", withExtension: "md")
+        skillURL = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "skills/agent-forwarding")
         
         // If not found, try the AgentTerminalKit bundle (for swift run)
         if skillURL == nil {
             // Find the bundle containing AgentTerminalKit resources
             for bundle in Bundle.allBundles {
-                if let url = bundle.url(forResource: "SKILL", withExtension: "md") {
+                if let url = bundle.url(forResource: "SKILL", withExtension: "md", subdirectory: "skills/agent-forwarding") {
                     skillURL = url
                     break
                 }

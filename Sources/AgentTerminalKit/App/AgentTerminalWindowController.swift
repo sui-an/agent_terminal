@@ -23,7 +23,26 @@ final class AgentTerminalWindowController: NSWindowController, NSWindowDelegate 
         self.store = store
         super.init(window: Self.makeWindow())
         window?.delegate = self
-        window?.contentView = NSHostingView(rootView: ContentView(store: store))
+
+        // Top-level container so a resize-guide line can sit ABOVE the SwiftUI
+        // hosting view (and thus above libghostty's Metal layer). A SwiftUI
+        // overlay can't — the terminal surface clips it past the sidebar edge.
+        let container = NSView()
+        let hosting = NSHostingView(rootView: ContentView(store: store))
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(hosting)
+        NSLayoutConstraint.activate([
+            hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        let guide = SidebarResizeGuideView()
+        guide.autoresizingMask = [.width, .height]
+        guide.frame = container.bounds
+        container.addSubview(guide, positioned: .above, relativeTo: hosting)
+        window?.contentView = container
+        store.showSidebarResizeGuide = { [weak guide] x in guide?.updateGuide(x: x) }
         // The last tab closing opens a default terminal instead of exiting
         store.onBecameEmpty = { [weak self] in
             guard let self = self else { return }
@@ -68,5 +87,38 @@ final class AgentTerminalWindowController: NSWindowController, NSWindowDelegate 
 
     func windowDidBecomeKey(_ notification: Notification) {
         onDidBecomeKey?(self)
+    }
+}
+
+/// Top-level overlay that draws a single vertical guide line during a sidebar
+/// resize drag. Sits above the SwiftUI hosting view so it isn't clipped by
+/// libghostty's Metal surface. `updateGuide(x:)` with nil hides it; non-nil
+/// positions a 2pt line at that x (in this view's coords). Pass-through for hit
+/// testing so it never intercepts clicks.
+final class SidebarResizeGuideView: NSView {
+    private let line = NSBox()
+    /// Top chrome strip (32pt) + its 1pt hairline. The guide starts below it so
+    /// it aligns with the tab bar's top instead of running up to the window top.
+    private let topInset: CGFloat = 33
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        line.boxType = .custom
+        line.borderWidth = 0
+        line.fillColor = NSColor(Theme.chromeActive)
+        line.isHidden = true
+        addSubview(line)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not a storyboard view") }
+
+    // Never intercept mouse events — the line is purely decorative.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func updateGuide(x: CGFloat?) {
+        guard let x else { line.isHidden = true; return }
+        line.isHidden = false
+        // NSView origin is bottom-left, y up: leave `topInset` clear at the top.
+        line.frame = NSRect(x: x - 1, y: 0, width: 2, height: max(0, bounds.height - topInset))
     }
 }

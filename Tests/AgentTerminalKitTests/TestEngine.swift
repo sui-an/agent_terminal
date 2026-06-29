@@ -34,6 +34,7 @@ final class TestEngine: TerminalEngine {
     var grabsFocusOnMount: Bool = true
     private(set) var flushSizeCount: Int = 0
     func flushSize() { flushSizeCount += 1 }
+    func focusSurface() {}
 
     private(set) var performedActions: [String] = []
     @discardableResult
