@@ -21,6 +21,17 @@ final class Workspace: Identifiable {
     /// shape.
     var zoomedPaneId: UUID?
 
+    /// Broadcast input bar: when active, a bottom-anchored composer sends one
+    /// message to every visible tab in this workspace (each pane's active
+    /// tab). Runtime-only and per-workspace — never persisted, scoped to this
+    /// workspace so switching away hides it and closing clears the draft.
+    var broadcastActive = false
+    var broadcastDraft = ""
+    /// Broadcast editor height, persisted across workspace switches (runtime-
+    /// only). 0 means "unset — use the bar's default"; the resize handle writes
+    /// the live value here, and closing the bar resets it to 0.
+    var broadcastEditorHeight: CGFloat = 0
+
     /// Is `paneId` the currently zoomed pane?
     func isZoomed(_ paneId: UUID) -> Bool { zoomedPaneId == paneId }
 

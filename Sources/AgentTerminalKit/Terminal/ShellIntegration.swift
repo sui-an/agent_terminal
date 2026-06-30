@@ -903,6 +903,9 @@ enum AgentTerminalShellIntegration {
         fi
         status=$?
         if [[ -n "$AGENTTERMINAL_SURFACE_ID" && -n "$AGENTTERMINAL_HOOK_BIN" ]]; then
+            if [[ $status -ne 0 ]]; then
+                "$AGENTTERMINAL_HOOK_BIN" codex failure 2>/dev/null
+            fi
             "$AGENTTERMINAL_HOOK_BIN" codex ended 2>/dev/null
         fi
         \(agentMarkerCommand(slug: "codex", event: .ended))
@@ -1161,6 +1164,9 @@ enum AgentTerminalShellIntegration {
             "$real" "$@"
             status=$?
             if [[ -n "$AGENTTERMINAL_SURFACE_ID" && -n "$AGENTTERMINAL_HOOK_BIN" ]]; then
+                if [[ $status -ne 0 ]]; then
+                    "$AGENTTERMINAL_HOOK_BIN" \(slug) failure 2>/dev/null
+                fi
                 "$AGENTTERMINAL_HOOK_BIN" \(slug) ended 2>/dev/null
             fi
             \(agentMarkerCommand(slug: slug, event: .ended))
@@ -1179,9 +1185,9 @@ enum AgentTerminalShellIntegration {
     /// agentterminal-generated on upgrade — a user's own `agentterminal.ts` plugin would
     /// not carry the marker and stays untouched.
     static let opencodePluginScript = """
-    // \(managedFileMarker) — pings AgentTerminalHook on prompt-submit and turn-end so
-    // the sidebar agent dot tracks per-session activity. Safe to delete; will
-    // be regenerated next time agentterminal launches.
+    // \(managedFileMarker) — pings AgentTerminalHook on prompt-submit, turn-end,
+    // and error so the sidebar dot tracks per-session activity across all states.
+    // Safe to delete; will be regenerated next time agentterminal launches.
     export const AgentTerminalPlugin = async ({ $ }) => {
       const surface = process.env.AGENTTERMINAL_SURFACE_ID
       const hookBin = process.env.AGENTTERMINAL_HOOK_BIN
@@ -1195,15 +1201,16 @@ enum AgentTerminalShellIntegration {
         "chat.message": async () => { await ping("running") },
         event: async ({ event }) => {
           if (event?.type === "session.idle") await ping("attention")
+          if (event?.type === "session.error") await ping("failure")
         },
       }
     }
     """
 
     static let mimocodePluginScript = """
-    // \(managedFileMarker) — pings AgentTerminalHook on message-submit and turn-end so
-    // the sidebar agent dot tracks per-session activity. Safe to delete; will
-    // be regenerated next time agentterminal launches.
+    // \(managedFileMarker) — pings AgentTerminalHook on message-submit, turn-end,
+    // and error so the sidebar dot tracks per-session activity across all states.
+    // Safe to delete; will be regenerated next time agentterminal launches.
     const AgentTerminalPlugin = async ({ $ }) => {
       const surface = process.env.AGENTTERMINAL_SURFACE_ID
       const hookBin = process.env.AGENTTERMINAL_HOOK_BIN
@@ -1217,6 +1224,7 @@ enum AgentTerminalShellIntegration {
         "chat.message": async () => { await ping("running") },
         event: async ({ event }) => {
           if (event?.type === "session.idle") await ping("attention")
+          if (event?.type === "session.error") await ping("failure")
         },
       }
     }

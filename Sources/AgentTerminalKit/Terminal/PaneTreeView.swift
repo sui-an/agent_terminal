@@ -110,6 +110,17 @@ private struct PaneView: View {
         .opacity(paneOpacity)
         .animation(Theme.chromeTransition, value: isFocused)
         .overlay {
+            // Broadcast target highlight: while the workspace's broadcast bar
+            // is open, every visible pane receives the input, so outline each
+            // one so the user can see where their typing will land.
+            if workspace.broadcastActive {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Theme.activityRunning, lineWidth: 2)
+                    .padding(EdgeInsets(top: -2, leading: 4, bottom: 4, trailing: 4))
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
             if panelDropActive {
                 GeometryReader { g in
                     let w = g.size.width, h = g.size.height

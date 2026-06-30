@@ -11,13 +11,13 @@ import Foundation
 /// Lifecycle signal an agent's hook fired. Wire format is the raw String
 /// case names; the enum lets `WorkspaceStore` switch exhaustively.
 enum HookEvent: String {
-    case running, attention, idle, ended
+    case running, attention, idle, ended, failure
 
     var activityState: SessionActivityState {
         switch self {
         case .running: return .running
         case .attention: return .attention
-        case .idle, .ended: return .idle
+        case .idle, .ended, .failure: return .idle
         }
     }
 }

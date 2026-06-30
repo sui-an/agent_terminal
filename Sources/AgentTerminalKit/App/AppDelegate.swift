@@ -681,6 +681,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
             selfRow("Focus Previous Pane", #selector(handleFocusPreviousPane), "["),
             selfRow("Focus Next Pane", #selector(handleFocusNextPane), "]"),
             .separator,
+            selfRow("Broadcast Input", #selector(handleBroadcastInput), "b", modifiers: [.command, .option]),
+            .separator,
             // ⌃⇥ / ⌃⇧⇥ cycle within the focused pane's tab list — same gesture
             // browsers use. Discrete from ⌘1-⌘9 below which jumps to a tab by
             // ordinal; cycle wraps at the ends and doesn't need a digit key.
@@ -940,6 +942,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
 
     @objc private func handleFocusPreviousPane() {
         cyclePaneFocus(forward: false)
+    }
+
+    @objc private func handleBroadcastInput() {
+        guard let store = activeStore, let workspace = store.active else { return }
+        withAnimation(Theme.chromeTransition) {
+            workspace.broadcastActive.toggle()
+        }
+        if !workspace.broadcastActive {
+            workspace.broadcastDraft = ""
+            workspace.broadcastEditorHeight = 0
+        }
     }
 
     private func cyclePaneFocus(forward: Bool) {

@@ -81,8 +81,15 @@ struct ContentView: View {
     @ViewBuilder
     private var mainPane: some View {
         if let workspace = store.active {
-            PaneTreeView(node: workspace.root, workspace: workspace, store: store)
-                .id(workspace.id)
+            VStack(spacing: 0) {
+                PaneTreeView(node: workspace.root, workspace: workspace, store: store)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if workspace.broadcastActive {
+                    BroadcastBar(workspace: workspace, store: store)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .id(workspace.id)
         } else {
             Color.clear
         }

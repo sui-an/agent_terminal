@@ -38,6 +38,7 @@ class _SmartTooltipState extends State<SmartTooltip> {
   final OverlayPortalController _portal = OverlayPortalController();
   Timer? _showTimer;
   Timer? _hideTimer;
+  final GlobalKey _childKey = GlobalKey();
 
   TooltipDirection get _direction =>
       widget.direction ??
@@ -67,32 +68,88 @@ class _SmartTooltipState extends State<SmartTooltip> {
     });
   }
 
-  ({Alignment target, Alignment follower, Offset offset}) _anchors() {
+  ({Alignment target, Alignment follower, Offset offset, TooltipDirection actual}) _anchors() {
     const gap = 8.0;
-    switch (_direction) {
+
+    // Get child position on screen
+    final box = _childKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) {
+      return _defaultAnchors(_direction, gap);
+    }
+
+    final childPos = box.localToGlobal(Offset.zero);
+    final childSize = box.size;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    const tooltipWidth = 140.0;
+    const tooltipHeight = 32.0;
+
+    var dir = _direction;
+
+    // Bottom button: prefer above, fall back to left/right if above is clipped
+    final atBottom = childPos.dy + childSize.height + gap + tooltipHeight > screenHeight;
+    final hasSpaceAbove = childPos.dy - gap - tooltipHeight >= 0;
+    final hasSpaceLeft = childPos.dx - gap - tooltipWidth >= 0;
+    final hasSpaceRight = childPos.dx + childSize.width + gap + tooltipWidth <= screenWidth;
+
+    if (atBottom) {
+      if (hasSpaceAbove) {
+        dir = TooltipDirection.above;
+      } else if (hasSpaceLeft) {
+        dir = TooltipDirection.left;
+      } else if (hasSpaceRight) {
+        dir = TooltipDirection.right;
+      }
+    } else {
+      // For non-bottom buttons, do edge-aware flip on the requested direction
+      switch (_direction) {
+        case TooltipDirection.right:
+          if (!hasSpaceRight) dir = TooltipDirection.left;
+          break;
+        case TooltipDirection.left:
+          if (!hasSpaceLeft) dir = TooltipDirection.right;
+          break;
+        case TooltipDirection.above:
+          if (!hasSpaceAbove) dir = TooltipDirection.below;
+          break;
+        case TooltipDirection.below:
+          if (atBottom) dir = TooltipDirection.above;
+          break;
+      }
+    }
+
+    return _defaultAnchors(dir, gap).copyWith(actual: dir);
+  }
+
+  ({Alignment target, Alignment follower, Offset offset, TooltipDirection actual}) _defaultAnchors(TooltipDirection dir, double gap) {
+    switch (dir) {
       case TooltipDirection.right:
         return (
           target: Alignment.centerRight,
           follower: Alignment.centerLeft,
           offset: const Offset(gap, 0),
+          actual: dir,
         );
       case TooltipDirection.left:
         return (
           target: Alignment.centerLeft,
           follower: Alignment.centerRight,
           offset: const Offset(-gap, 0),
+          actual: dir,
         );
       case TooltipDirection.above:
         return (
           target: Alignment.topCenter,
           follower: Alignment.bottomCenter,
           offset: const Offset(0, -gap),
+          actual: dir,
         );
       case TooltipDirection.below:
         return (
           target: Alignment.bottomCenter,
           follower: Alignment.topCenter,
           offset: const Offset(0, gap),
+          actual: dir,
         );
     }
   }
@@ -107,8 +164,6 @@ class _SmartTooltipState extends State<SmartTooltip> {
         controller: _portal,
         overlayChildBuilder: (context) {
           return Positioned(
-            // Width is unconstrained so the bubble sizes to its text; the
-            // follower handles positioning relative to the target.
             child: CompositedTransformFollower(
               link: _link,
               showWhenUnlinked: false,
@@ -126,7 +181,7 @@ class _SmartTooltipState extends State<SmartTooltip> {
         child: MouseRegion(
           onEnter: (_) => _scheduleShow(),
           onExit: (_) => _scheduleHide(),
-          child: widget.child,
+          child: SizedBox(key: _childKey, child: widget.child),
         ),
       ),
     );

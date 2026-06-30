@@ -765,7 +765,11 @@ struct AgentTerminalSettingsView: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
-            .help("When off, agents can only message within the same workspace")
+            Text("Allow agents in different workspaces to send messages to each other")
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.chromeMuted)
+                .padding(.horizontal, 28)
+                .padding(.top, 4)
         }
     }
 

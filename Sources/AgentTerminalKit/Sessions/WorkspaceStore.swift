@@ -1179,6 +1179,13 @@ final class WorkspaceStore {
                 onSessionAlert(session.id, .completed)
                 session.agent = .terminal
             }
+        } else if event == .failure {
+            // Agent exited with non-zero status — fire failure notification
+            // before reverting, so displayAgent is still correct.
+            if session.agent.id == agent.id || session.agent.baseAgentId == agent.id {
+                onSessionAlert(session.id, .failure)
+                session.agent = .terminal
+            }
         } else if session.agent.isShell {
             // Includes the default Terminal *and* any TerminalPreset — a
             // user starting Claude inside a preset terminal should get
@@ -1263,6 +1270,17 @@ final class WorkspaceStore {
                 success: success ?? true,
                 toolUseId: toolUseId
             )
+            // Tool call completed — Claude resumes processing.
+            // Restore .running so the dot reflects active work, and clear
+            // the attention debounce timestamp so the subsequent Stop hook
+            // (which also maps to .attention) won't be silently eaten.
+            if session.activityState == .attention {
+                session.activityState = .running
+                lastAttentionTime[session.id] = nil
+                if let (workspace, _) = location(ofSessionId: sessionId) {
+                    workspace.invalidateReadout()
+                }
+            }
         }
     }
 

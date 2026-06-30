@@ -104,11 +104,10 @@ enum Theme {
     /// on every `mix(_, .black, _)` call is wasted work. Pre-convert once.
     private static let sRGBBlack = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
 
-    /// Activity-dot palette — one design token per signal so sidebar workspace
-    /// rows and tab pills read identically. Hue picked for at-a-glance read:
-    /// cool blue == "thinking", warm amber == "needs you", warm red == "look
-    /// when free". Precedence (where multiple apply) is encoded by callers.
-    static let activityRunning = Color(.sRGB, red: 0.41, green: 0.69, blue: 0.86, opacity: 1)
+    /// Activity-dot palette — traffic light semantics:
+    /// green == running/thinking, amber == needs you, red == failure.
+    /// Precedence (where multiple apply) is encoded by callers.
+    static let activityRunning = Color(.sRGB, red: 0.45, green: 0.78, blue: 0.50, opacity: 1)
     static let activityAttention = Color(.sRGB, red: 0.91, green: 0.69, blue: 0.40, opacity: 1)
     static let activityFailure = Color(.sRGB, red: 0.91, green: 0.40, blue: 0.40, opacity: 1)
 
