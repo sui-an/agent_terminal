@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/workspace/workspace_state.dart';
+import 'package:core/state/providers.dart';
+import 'package:core/agent/agent_state.dart';
 import '../../agent_icon.dart';
 
-class WorkspaceTile extends StatelessWidget {
+class WorkspaceTile extends ConsumerWidget {
   final WorkspaceState workspace;
   final bool isSelected;
   final VoidCallback onTap;
@@ -23,6 +26,15 @@ class WorkspaceTile extends StatelessWidget {
     final activeAgentId = workspace.panels.isNotEmpty && workspace.panels.first.tabs.isNotEmpty
         ? workspace.panels.first.tabs.first.agentId
         : null;
+    final agentStates = ref.watch(agentProvider);
+    final agentState = activeAgentId != null
+        ? agentStates.where((a) => a.id == activeAgentId).firstOrNull
+        : null;
+    final iconColor = agentState != null
+        ? _statusColor(agentState.status)
+        : (isSelected
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.onSurface.withOpacity(0.5));
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -41,9 +53,7 @@ class WorkspaceTile extends StatelessWidget {
                 AgentIcon.getIcon(
                   activeAgentId,
                   size: 16,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  color: iconColor,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -97,6 +107,19 @@ class WorkspaceTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _statusColor(AgentStatus status) {
+    switch (status) {
+      case AgentStatus.running:
+        return const Color(0xFF30D158);
+      case AgentStatus.waiting:
+        return const Color(0xFFFF9F0A);
+      case AgentStatus.error:
+        return const Color(0xFFFF453A);
+      case AgentStatus.idle:
+        return const Color(0xFF8E8E93);
+    }
   }
 
   void _showRenameDialog(BuildContext context) {

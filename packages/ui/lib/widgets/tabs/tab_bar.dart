@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/workspace/workspace_state.dart';
+import 'package:core/state/providers.dart';
+import 'package:core/agent/agent_state.dart';
 import 'package:ui/theme/app_theme.dart';
 import '../common/smart_tooltip.dart';
 import '../common/split_icon.dart';
 import '../../agent_icon.dart';
 
-class TabBarWidget extends StatefulWidget {
+class TabBarWidget extends ConsumerStatefulWidget {
   final List<TabState> tabs;
   final String? selectedTabId;
   final String panelId;
@@ -35,7 +38,7 @@ class TabBarWidget extends StatefulWidget {
   State<TabBarWidget> createState() => _TabBarWidgetState();
 }
 
-class _TabBarWidgetState extends State<TabBarWidget> {
+class _TabBarWidgetState extends ConsumerState<TabBarWidget> {
   static const double _tabWidth = 140;
   static const double _edgeRatio = 0.25;
 
@@ -243,10 +246,30 @@ class _TabBarWidgetState extends State<TabBarWidget> {
     super.dispose();
   }
 
+  Color _statusColor(AgentStatus status) {
+    switch (status) {
+      case AgentStatus.running:
+        return AppTheme.success;
+      case AgentStatus.waiting:
+        return AppTheme.warning;
+      case AgentStatus.error:
+        return AppTheme.error;
+      case AgentStatus.idle:
+        return AppTheme.textSecondary;
+    }
+  }
+
   Widget _buildTab(int i) {
     final tab = widget.tabs[i];
     final sel = tab.id == widget.selectedTabId;
     final drop = _dragging && _hoverIdx == i && _draggedTabId != tab.id;
+    final agentStates = ref.watch(agentProvider);
+    final agentState = tab.agentId != null
+        ? agentStates.where((a) => a.id == tab.agentId).firstOrNull
+        : null;
+    final statusColor = agentState != null
+        ? _statusColor(agentState.status)
+        : (sel ? AppTheme.accent : AppTheme.textSecondary);
     return Container(
       width: _tabWidth, height: 36,
       decoration: BoxDecoration(
@@ -261,7 +284,7 @@ class _TabBarWidgetState extends State<TabBarWidget> {
       alignment: Alignment.centerLeft,
       child: Row(
         children: [
-          AgentIcon.getIcon(tab.agentId, size: 12, color: sel ? AppTheme.accent : AppTheme.textSecondary),
+          AgentIcon.getIcon(tab.agentId, size: 12, color: statusColor),
           const SizedBox(width: 6),
           Expanded(child: Text(tab.title, style: TextStyle(fontSize: 12, color: sel ? AppTheme.text : AppTheme.textSecondary), overflow: TextOverflow.ellipsis)),
           Icon(Icons.close, size: 12, color: AppTheme.textSecondary.withOpacity(0.5)),
