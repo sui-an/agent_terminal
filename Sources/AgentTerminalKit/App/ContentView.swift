@@ -3,11 +3,11 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var store: WorkspaceStore
-    /// Observed so chrome re-renders when the user switches themes.
-    @State private var settings = AgentTerminalSettingsModel.shared
+    /// Observed so chrome re-renders when the theme changes.
+    @State private var themeObserver = ThemeObserver.shared
 
     var body: some View {
-        let _ = settings.terminalThemeSelection
+        let _ = themeObserver.version
         
         VStack(spacing: 0) {
             topStrip
