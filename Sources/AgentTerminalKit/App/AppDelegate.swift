@@ -109,6 +109,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         AgentTerminalOnboarding.runIfNeeded()
         let settings = AgentTerminalSettingsModel.shared
         Theme.applyTheme(settings.selectedTerminalTheme)
+        // Push resolved theme to ghostty BEFORE restoreWindows() creates any
+        // surfaces, so new ghostty surfaces get the correct theme on first
+        // launch instead of defaulting to dark (settings.json stores nil for
+        // FollowSystem).
+        if let theme = settings.selectedTerminalTheme {
+            LibghosttyApp.shared.reloadConfig(withTerminalTheme: theme)
+        }
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(systemAppearanceDidChange),
