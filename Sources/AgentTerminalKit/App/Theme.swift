@@ -1,6 +1,16 @@
 import AppKit
 import SwiftUI
 
+/// Observable signal that fires when `Theme.applyTheme` is called.
+/// SwiftUI views observe this to re-render their chrome when the theme
+/// changes (user picks a different theme or FollowSystem reacts to the
+/// system appearance changing).
+@MainActor @Observable
+final class ThemeObserver {
+    static let shared = ThemeObserver()
+    var version = 0
+}
+
 /// Design tokens for agentterminal's chrome — refined minimal, low-contrast palette,
 /// generous rhythm. The terminal theme is the source for the whole window:
 /// libghostty gets concrete color config, while SwiftUI chrome derives its
@@ -9,8 +19,17 @@ import SwiftUI
 enum Theme {
     // MARK: Colors
 
-    static var chromeBackground: Color { Color(nsColor: resolved.chromeBackgroundColor) }
-    static var chromeForeground: Color { Color(nsColor: resolved.foregroundColor) }
+    /// Converts an NSColor to a static sRGB-based Color that doesn't depend
+    /// on the current window appearance for resolution. This prevents
+    /// first-frame rendering issues where Color(nsColor:) can resolve
+    /// differently before/after the window appearance stabilises.
+    private static func color(from nsColor: NSColor) -> Color {
+        let c = nsColor.usingColorSpace(.sRGB) ?? nsColor
+        return Color(.sRGB, red: Double(c.redComponent), green: Double(c.greenComponent), blue: Double(c.blueComponent))
+    }
+
+    static var chromeBackground: Color { color(from: resolved.chromeBackgroundColor) }
+    static var chromeForeground: Color { color(from: resolved.foregroundColor) }
     static var chromeMuted: Color { resolved.chromeMuted }
     static var chromeFaint: Color { resolved.chromeFaint }
     static var chromeHairline: Color { resolved.chromeHairline }
@@ -51,7 +70,8 @@ enum Theme {
         if let cached = cachedResolved, cached.cacheKey == key { return }
         cachedResolved = Resolved(cacheKey: key, theme: theme)
         resolved = cachedResolved!
-        version += 1  // Force views to rebuild
+        version += 1
+        ThemeObserver.shared.version += 1
     }
     private static var cachedResolved: Resolved?
 
@@ -87,14 +107,21 @@ enum Theme {
             self.chromeBackgroundColor = isLight
                 ? mix(backgroundColor, foregroundColor, 0.035)
                 : mix(backgroundColor, sRGBBlack, 0.16)
-            let mutedNS = mix(foregroundColor, chromeBackgroundColor, isLight ? 0.42 : 0.52)
-            let faintNS = mix(foregroundColor, chromeBackgroundColor, isLight ? 0.68 : 0.72)
-            let fgColor = Color(nsColor: foregroundColor)
-            self.chromeMuted = Color(nsColor: mutedNS)
-            self.chromeFaint = Color(nsColor: faintNS)
-            self.chromeHairline = fgColor.opacity(isLight ? 0.10 : 0.04)
-            self.chromeHover = fgColor.opacity(isLight ? 0.11 : 0.07)
-            self.chromeActive = fgColor.opacity(isLight ? 0.20 : 0.15)
+            // Dark mode blend must keep muted ≥ 4.5:1 contrast against
+            // chromeBackground (~#191919). 0.30 blend → #969696 → 5.4:1 ✓.
+            // Light mode 0.42 blend → #676767 → 6.0:1 against #F6F6F6 ✓.
+            let mutedNS = mix(foregroundColor, chromeBackgroundColor, isLight ? 0.42 : 0.30)
+            // Faint needs to stay readable as secondary text / placeholder.
+            let faintNS = mix(foregroundColor, chromeBackgroundColor, isLight ? 0.68 : 0.50)
+            // Use Theme.color(from:) instead of Color(nsColor:) so every
+            // derived token is a static sRGB color — no appearance-dependent
+            // resolution, which means no first-frame rendering mismatch.
+            self.chromeMuted = Theme.color(from: mutedNS)
+            self.chromeFaint = Theme.color(from: faintNS)
+            let fg = Theme.color(from: foregroundColor)
+            self.chromeHairline = fg.opacity(isLight ? 0.10 : 0.04)
+            self.chromeHover = fg.opacity(isLight ? 0.11 : 0.07)
+            self.chromeActive = fg.opacity(isLight ? 0.20 : 0.15)
         }
     }
 
