@@ -109,6 +109,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         AgentTerminalOnboarding.runIfNeeded()
         let settings = AgentTerminalSettingsModel.shared
         Theme.applyTheme(settings.selectedTerminalTheme)
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(systemAppearanceDidChange),
+            name: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil
+        )
         AgentTerminalShellIntegration.installAgentHooks(sshRemoteAgentDetection: settings.sshRemoteAgentDetection)
         AgentTerminalShellIntegration.refreshClaudeCustomSettings(customAgents: settings.customAgents)
         
@@ -147,6 +153,25 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         Task.detached(priority: .utility) {
             AgentTerminalShellIntegration.prunePastesCache()
         }
+    }
+
+    @objc private func systemAppearanceDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleSystemAppearanceChange()
+        }
+    }
+
+    public func applicationDidChangeEffectiveAppearance(_ application: NSApplication) {
+        handleSystemAppearanceChange()
+    }
+
+    private func handleSystemAppearanceChange() {
+        let settings = AgentTerminalSettingsModel.shared
+        guard settings.terminalThemeSelection == AgentTerminalSettingsModel.followSystemThemeSelection,
+              let resolvedTheme = settings.selectedTerminalTheme else { return }
+        Theme.applyTheme(resolvedTheme)
+        refreshThemeAppearances()
+        LibghosttyApp.shared.reloadConfig(withTerminalTheme: resolvedTheme)
     }
 
     /// Rebuilds every window persisted in `state.json`, or opens one default

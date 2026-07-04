@@ -31,7 +31,8 @@ final class LibghosttyApp {
             read_clipboard_cb: agentterminalReadClipboardCb,
             confirm_read_clipboard_cb: agentterminalConfirmReadClipboardCb,
             write_clipboard_cb: agentterminalWriteClipboardCb,
-            close_surface_cb: agentterminalCloseSurfaceCb
+            close_surface_cb: agentterminalCloseSurfaceCb,
+            tmux_control_cb: nil
         )
 
         guard let config = AgentTerminalSettings.makeGhosttyConfig() else {
@@ -54,6 +55,26 @@ final class LibghosttyApp {
         let parsed = AgentTerminalSettings.loadParsed()
         guard let config = AgentTerminalSettings.makeGhosttyConfig(parsed: parsed) else {
             NSLog("agentterminal: ghostty_config_new failed during reload")
+            return
+        }
+        ghostty_app_update_config(app, config)
+        GhosttySurfaceRegistry.updateAll(parsed: parsed)
+    }
+
+    /// Reloads ghostty config with the given terminal theme injected into the
+    /// parsed settings, without persisting it to `settings.json`.
+    /// Used when "Follow System" resolves a different theme on system appearance
+    /// change — the theme needs to reach ghostty surfaces, but the FollowSystem
+    /// selection must remain as the stored preference.
+    func reloadConfig(withTerminalTheme theme: AgentTerminalTheme) {
+        guard let app else { return }
+        var parsed = AgentTerminalSettings.loadParsed() ?? [:]
+        var terminal = parsed["terminal"] as? [String: Any] ?? [:]
+        terminal["theme"] = theme.storedValue
+        parsed["terminal"] = terminal
+
+        guard let config = AgentTerminalSettings.makeGhosttyConfig(parsed: parsed) else {
+            NSLog("agentterminal: ghostty_config_new failed for theme reload")
             return
         }
         ghostty_app_update_config(app, config)
