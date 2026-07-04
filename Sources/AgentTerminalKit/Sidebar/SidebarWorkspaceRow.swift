@@ -34,8 +34,10 @@ struct SidebarWorkspaceRow: View {
     @State private var isContextMenuOpen = false
     @State private var isRenameOpen = false
     @State private var pendingRename = ""
+    @State private var themeObserver = ThemeObserver.shared
 
     var body: some View {
+        let _ = themeObserver.version
         let readout = workspace.sidebarReadout
         let dotColor = Self.activityDotColor(state: readout.state, hasFailure: readout.hasCommandFailure)
         Group {

@@ -19,8 +19,11 @@ struct TabBarItem: View {
     @State private var isRenameOpen = false
     @State private var isForwardPickerOpen = false
     @State private var pendingRename = ""
+    /// Observed so foreground/muted colours update when the theme changes.
+    @State private var themeObserver = ThemeObserver.shared
 
     var body: some View {
+        let _ = themeObserver.version
         HStack(spacing: 5) {
             commandStatusDot
             AgentIconView(

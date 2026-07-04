@@ -28,6 +28,11 @@ struct HoverableIconButton: View {
     var immediateTooltipAlignment: ImmediateTooltipAlignment = .center
 
     @State private var isHovered = false
+    /// Observed so the foreground colour updates when the theme changes,
+    /// even though the button's let-bound properties haven't (SwiftUI skips
+    /// body re-evaluation when the struct appears unchanged across a parent
+    /// re-render, so `Theme.chromeForeground` would otherwise stay stale).
+    @State private var themeObserver = ThemeObserver.shared
 
     private var tooltipOverlayAlignment: Alignment {
         let vertical: VerticalAlignment = immediateTooltipPlacement == .above ? .bottom : .top
@@ -39,6 +44,7 @@ struct HoverableIconButton: View {
     }
 
     var body: some View {
+        let _ = themeObserver.version
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: fontSize, weight: .medium))

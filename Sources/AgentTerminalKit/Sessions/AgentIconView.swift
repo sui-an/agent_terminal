@@ -45,8 +45,10 @@ struct AgentIconView: View {
     let asset: String?
     let fallbackSymbol: String
     let size: CGFloat
+    @State private var themeObserver = ThemeObserver.shared
 
     var body: some View {
+        let _ = themeObserver.version
         Group {
             if let asset, let image = AgentIcon.nsImage(asset: asset) {
                 styledIcon(image, monochrome: AgentIcon.isMonochrome(asset))
