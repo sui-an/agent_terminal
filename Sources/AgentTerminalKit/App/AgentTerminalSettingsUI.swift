@@ -22,8 +22,9 @@ final class AgentTerminalSettingsModel {
     var fontSize: Int? = nil
     var cursorStyle: String = "block"
     /// Picker selection for the terminal theme row. Values are one of:
-    /// `defaultThemeSelection`, `customThemeSelection`, or a theme choice id.
-    var terminalThemeSelection: String = AgentTerminalSettingsModel.defaultThemeSelection
+    /// `followSystemThemeSelection`, `defaultThemeSelection`,
+    /// `customThemeSelection`, or a theme choice id.
+    var terminalThemeSelection: String = AgentTerminalSettingsModel.followSystemThemeSelection
     var terminalThemeChoices: [AgentTerminalTheme] = AgentTerminalTheme.availableThemes()
     /// Unknown raw `terminal.theme` values from hand-edited settings.json.
     /// Kept so saving an unrelated Settings field doesn't delete a custom
@@ -386,11 +387,22 @@ final class AgentTerminalSettingsModel {
         scheduleSave()
     }
 
+    static let followSystemThemeSelection = "__agentterminal-follow-system"
     static let defaultThemeSelection = "__agentterminal-default-theme"
     static let customThemeSelection = "__agentterminal-custom-theme"
 
     var selectedTerminalTheme: AgentTerminalTheme? {
-        terminalThemeChoices.first { $0.id == terminalThemeSelection }
+        if terminalThemeSelection == Self.followSystemThemeSelection {
+            return Self.resolveFollowSystemTheme(in: terminalThemeChoices)
+        }
+        return terminalThemeChoices.first { $0.id == terminalThemeSelection }
+    }
+
+    /// Detects the current macOS system appearance and returns the matching
+    /// `macos-dark` or `macos-light` preset.
+    static func resolveFollowSystemTheme(in themes: [AgentTerminalTheme]) -> AgentTerminalTheme? {
+        let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return themes.first { $0.id == (isDark ? "macos-dark" : "macos-light") }
     }
 
     var customTerminalThemeLabel: String? {
@@ -414,7 +426,7 @@ final class AgentTerminalSettingsModel {
     ) -> (selection: String, customRawValue: String?) {
         guard let rawTheme,
               !rawTheme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return (defaultThemeSelection, nil)
+            return (followSystemThemeSelection, nil)
         }
         if let theme = AgentTerminalTheme.theme(for: rawTheme, in: themes) {
             return (theme.id, nil)
@@ -427,6 +439,9 @@ final class AgentTerminalSettingsModel {
         customRawValue: String?,
         in themes: [AgentTerminalTheme] = AgentTerminalTheme.presets
     ) -> String? {
+        if selection == followSystemThemeSelection {
+            return nil
+        }
         if selection == defaultThemeSelection {
             return nil
         }
@@ -524,14 +539,15 @@ struct AgentTerminalSettingsView: View {
     @Bindable var model: AgentTerminalSettingsModel
     let onOpenInTab: () -> Void
     @State private var selected: SettingsCategory = .general
+    @State private var themeObserver = ThemeObserver.shared
 
     var body: some View {
-        let _ = Theme.version
-        // The autosave `.onChange` observers are split across two statements
-        // via an intermediate `let`: a single chain this long (16 modifiers)
-        // overruns the Swift type-checker's budget ("unable to type-check in
-        // reasonable time"). Each half stays comfortably under the limit.
-        let core = HStack(spacing: 0) {
+        let _ = themeObserver.version
+        // The autosave `.onChange` observers are split across multiple
+        // intermediate lets so the Swift type-checker doesn't have to infer
+        // the full 16-modifier chain at once ("unable to type-check in
+        // reasonable time"). Each segment stays comfortably under the limit.
+        let themed = HStack(spacing: 0) {
             sidebar
             Rectangle().fill(Theme.chromeHairline).frame(width: 1)
             ScrollView { detail }
@@ -539,20 +555,27 @@ struct AgentTerminalSettingsView: View {
         }
         .background(Theme.chromeBackground)
         .preferredColorScheme(Theme.chromeColorScheme)
-        .onChange(of: model.fontFamily) { _, _ in model.scheduleSave() }
-        .onChange(of: model.fontSize) { _, _ in model.scheduleSave() }
-        .onChange(of: model.cursorStyle) { _, _ in model.scheduleSave() }
-        .onChange(of: model.terminalThemeSelection) { _, _ in
-            model.flushSave()
-            Theme.applyTheme(model.selectedTerminalTheme)
-            (NSApp.delegate as? AppDelegate)?.refreshThemeAppearances()
-        }
-        .onChange(of: model.agentOrder) { _, _ in model.scheduleSave() }
-        .onChange(of: model.hiddenAgents) { _, _ in model.scheduleSave() }
-        .onChange(of: model.agentOptions) { _, _ in model.scheduleSave() }
-        .onChange(of: model.defaultAgentId) { _, _ in model.scheduleSave() }
+        let core = themed
+            .onChange(of: model.fontFamily) { _, _ in model.scheduleSave() }
+            .onChange(of: model.fontSize) { _, _ in model.scheduleSave() }
+            .onChange(of: model.cursorStyle) { _, _ in model.scheduleSave() }
+            .onChange(of: model.agentOrder) { _, _ in model.scheduleSave() }
+            .onChange(of: model.hiddenAgents) { _, _ in model.scheduleSave() }
+            .onChange(of: model.agentOptions) { _, _ in model.scheduleSave() }
+            .onChange(of: model.defaultAgentId) { _, _ in model.scheduleSave() }
 
-        return core
+        // The terminal-theme onChange closure involves LibghosttyApp which
+        // the Swift type-checker finds expensive, so it sits on its own chain
+        // segment before the remaining .onChange modifiers.
+        let withTheme = core
+            .onChange(of: model.terminalThemeSelection) { _, _ in
+                model.flushSave()
+                Theme.applyTheme(model.selectedTerminalTheme)
+                (NSApp.delegate as? AppDelegate)?.refreshThemeAppearances()
+                guard let theme = model.selectedTerminalTheme else { return }
+                LibghosttyApp.shared.reloadConfig(withTerminalTheme: theme)
+            }
+        let afterCore = withTheme
             .onChange(of: model.customAgents) { _, _ in model.scheduleSave() }
             .onChange(of: model.resumeConversations) { _, _ in model.scheduleSave() }
             .onChange(of: model.sshRemoteAgentDetection) { _, _ in model.scheduleSave() }
@@ -560,6 +583,8 @@ struct AgentTerminalSettingsView: View {
             .onChange(of: model.terminalPresets) { _, _ in model.scheduleSave() }
             .onChange(of: model.hiddenPresets) { _, _ in model.scheduleSave() }
             .onChange(of: model.statusBarItems) { _, _ in model.scheduleSave() }
+
+        return afterCore
             .onChange(of: model.hiddenStatusBarItems) { _, _ in model.scheduleSave() }
             .onChange(of: model.hiddenToolCallAgents) { _, _ in model.scheduleSave() }
             .onChange(of: model.notificationsEnabled) { _, _ in model.scheduleSave() }
@@ -825,7 +850,7 @@ struct AgentTerminalSettingsView: View {
 
     private var themeControl: some View {
         Picker("", selection: $model.terminalThemeSelection) {
-            Text("Default").tag(AgentTerminalSettingsModel.defaultThemeSelection)
+            Text("Follow System").tag(AgentTerminalSettingsModel.followSystemThemeSelection)
             if let customLabel = model.customTerminalThemeLabel {
                 Text(customLabel).tag(AgentTerminalSettingsModel.customThemeSelection)
             }
@@ -833,6 +858,7 @@ struct AgentTerminalSettingsView: View {
             ForEach(model.bundledTerminalThemes) { preset in
                 Text(preset.title).tag(preset.id)
             }
+            Text("Midnight").tag(AgentTerminalSettingsModel.defaultThemeSelection)
             if !model.ghosttyUserThemes.isEmpty {
                 Divider()
                 ForEach(model.ghosttyUserThemes) { theme in
