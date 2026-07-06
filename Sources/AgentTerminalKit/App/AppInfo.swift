@@ -8,10 +8,10 @@ enum AgentTerminalApp {
     static let displayVersion = "1.0.0"
     static let tagline = "AI Agent Orchestration Terminal"
     static let author = "AgentTerminal Contributors"
-    static let authorURL = URL(string: "https://github.com/agentterminal/agentterminal")!
+    static let authorURL = URL(string: "https://github.com/sui-an/agent_terminal")!
     static let copyrightYear = "2026"
 
-    static let repositoryURL = URL(string: "https://github.com/agentterminal/agentterminal")!
-    static let issuesURL = URL(string: "https://github.com/agentterminal/agentterminal/issues")!
-    static let releasesAPIURL = URL(string: "https://api.github.com/repos/agentterminal/agentterminal/releases/latest")!
+    static let repositoryURL = URL(string: "https://github.com/sui-an/agent_terminal")!
+    static let issuesURL = URL(string: "https://github.com/sui-an/agent_terminal/issues")!
+    static let releasesAPIURL = URL(string: "https://api.github.com/repos/sui-an/agent_terminal/releases/latest")!
 }
