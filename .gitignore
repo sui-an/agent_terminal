@@ -62,3 +62,7 @@ scripts/.sisyphus/
 
 # Compiled binaries
 scripts/agentforward
+
+# Documentation
+docs/
+doc/
