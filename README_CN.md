@@ -11,16 +11,16 @@
 - MIT，基于Ghostty GPU 渲染基于 [libghostty](https://github.com/ghostty-org/ghostty)。
 
 **多窗口**
-![AgentTerminal MultiWindow](./Sources/AgentTerminalKit/Resources/Img/AgentTerminal.png)
+![AgentTerminal MultiWindow](./static/images/AgentTerminal.png)
 
 **通知**
-![AgentTerminal Notification](./Sources/AgentTerminalKit/Resources/Img/notification.png)
+![AgentTerminal Notification](./static/images/notification.png)
 
 **Agent通信协作**
-![AgentTerminal collaboration](./Sources/AgentTerminalKit/Resources/Img/forward.png)
+![AgentTerminal collaboration](./static/images/forward.png)
 
 **广播输入**
-![AgentTerminal broadcast input](./Sources/AgentTerminalKit/Resources/Img/broadcast-input.png)
+![AgentTerminal broadcast input](./static/images/broadcast-input.png)
 
 ---
 

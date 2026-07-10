@@ -11,16 +11,16 @@ Highlights:
 - MIT licensed, with GPU rendering powered by [libghostty](https://github.com/ghostty-org/ghostty).
 
 **Multiple windows**
-![AgentTerminal MultiWindow](./Sources/AgentTerminalKit/Resources/Img/AgentTerminal.png)
+![AgentTerminal MultiWindow](./static/images/AgentTerminal.png)
 
 **Notification**
-![AgentTerminal Notification](./Sources/AgentTerminalKit/Resources/Img/notification.png)
+![AgentTerminal Notification](./static/images/notification.png)
 
 **Agent-to-agent collaboration**
-![AgentTerminal collaboration](./Sources/AgentTerminalKit/Resources/Img/forward.png)
+![AgentTerminal collaboration](./static/images/forward.png)
 
 **Broadcast input**
-![AgentTerminal broadcast input](./Sources/AgentTerminalKit/Resources/Img/broadcast-input.png)
+![AgentTerminal broadcast input](./static/images/broadcast-input.png)
 
 ---
 
@@ -114,7 +114,7 @@ Join our AI Agent user communication QQ group:
 - **QQ Group**: 165034070 (OpenCode/ClaudeCode/AgentTerminal)
 - Scan the QR code below to join:
 
-<img src="./Sources/AgentTerminalKit/Resources/Img/qq-group-qr.jpg" width="200" alt="QQ Group QR Code">
+<img src="./static/images/qq-group-qr.jpg" width="200" alt="QQ Group QR Code">
 
 ## License
 MIT
