@@ -116,7 +116,7 @@ private struct PaneView: View {
             if workspace.broadcastActive {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Theme.activityRunning, lineWidth: 2)
-                    .padding(EdgeInsets(top: -2, leading: 4, bottom: 4, trailing: 4))
+                    .padding(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
                     .allowsHitTesting(false)
             }
         }
