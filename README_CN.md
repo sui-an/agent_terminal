@@ -19,6 +19,9 @@
 **Agent通信协作**
 ![AgentTerminal collaboration](./Sources/AgentTerminalKit/Resources/Img/forward.png)
 
+**广播输入**
+![AgentTerminal broadcast input](./Sources/AgentTerminalKit/Resources/Img/broadcast-input.png)
+
 ---
 
 ## 功能

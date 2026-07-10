@@ -19,6 +19,9 @@ Highlights:
 **Agent-to-agent collaboration**
 ![AgentTerminal collaboration](./Sources/AgentTerminalKit/Resources/Img/forward.png)
 
+**Broadcast input**
+![AgentTerminal broadcast input](./Sources/AgentTerminalKit/Resources/Img/broadcast-input.png)
+
 ---
 
 ## Features
