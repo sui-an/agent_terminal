@@ -1,8 +1,0 @@
-name: LibGhostty
-description: FFI bindings for libghostty
-output: 'libghostty_bindings.dart'
-headers:
-  entry-points:
-    - 'ghostty.h'
-  include-directives:
-    - 'ghostty.h'
