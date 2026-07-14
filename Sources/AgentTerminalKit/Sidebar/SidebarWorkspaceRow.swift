@@ -52,6 +52,15 @@ struct SidebarWorkspaceRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onActivate)
         .onHover { isHovered = $0 }
+        .overlay(alignment: .leading) {
+            if isHovered, isCompact {
+                TooltipView(text: workspace.title)
+                    .fixedSize()
+                    .offset(x: SidebarView.compactWidth - Theme.space2 * 2 + 5)
+                    .zIndex(10_000)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(RightClickCatcher { _ in isContextMenuOpen = true })
         .popover(isPresented: $isContextMenuOpen, arrowEdge: .trailing) {
             VStack(alignment: .leading, spacing: 0) {
@@ -106,7 +115,7 @@ struct SidebarWorkspaceRow: View {
                 isRenameOpen = false
             }
         }
-        .help(workspace.workingDirectory.path)
+        .help("")
         .onChange(of: workspace.renameRequested) { _, requested in
             if requested { consumeRenameRequest() }
         }
@@ -331,3 +340,29 @@ struct SidebarWorkspaceRow: View {
         return .clear
     }
 }
+
+/// Immediate hover tooltip — matches the style used by HoverableIconButton.
+private struct TooltipView: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(.black.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
+            .allowsHitTesting(false)
+    }
+}
+

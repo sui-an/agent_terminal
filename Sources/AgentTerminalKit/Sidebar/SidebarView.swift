@@ -70,14 +70,10 @@ struct SidebarView: View {
             HStack {
                 if isCompact {
                     Spacer()
-                    HoverableIconButton(
+                    CompactSidebarButton(
                         systemName: "plus",
-                        fontSize: 13,
-                        size: 28,
                         help: "New Workspace",
-                        action: { store.addWorkspace() },
-                        immediateTooltip: true,
-                        immediateTooltipPlacement: .above
+                        action: { store.addWorkspace() }
                     )
                     Spacer()
                 } else {
@@ -108,6 +104,7 @@ struct SidebarView: View {
             .padding(.vertical, Theme.space2)
         }
         .frame(width: isCompact ? Self.compactWidth : (store.sidebarWidth ?? Self.fullWidth))
+        .zIndex(1)
         .background(Theme.chromeBackground)
         .overlay {
             // Drop affordance: tinted fill + hairline stroke, inset from the
@@ -261,6 +258,7 @@ struct SidebarView: View {
                 sheet = .confirmCloseSource(request)
             }
         }
+
     }
 
     /// Shared subtitle string between the two bulk-close flows — folds
@@ -332,6 +330,7 @@ struct SidebarView: View {
         // row's own rename popover can open. onChange catches a request made
         // while the sidebar is up; onAppear catches one parked while the
         // sidebar was hidden (SidebarView mounts only after the reveal).
+        .scrollClipDisabled(true)
         .onChange(of: store.pendingRenameWorkspace?.id) { _, _ in
             revealWorkspaceForRename(using: proxy)
         }
@@ -562,5 +561,66 @@ struct SidebarResizeHandle: View {
 
     private func clampedWidth(_ width: CGFloat) -> CGFloat {
         min(max(width, minWidth), maxWidth).rounded()
+    }
+}
+
+/// Compact sidebar button with a right-side tooltip that matches the workspace
+/// row tooltip style. Uses `.overlay` instead of `.popover` so the button
+/// fires on the first click.
+private struct CompactSidebarButton: View {
+    let systemName: String
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @State private var themeObserver = ThemeObserver.shared
+
+    var body: some View {
+        let _ = themeObserver.version
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.chromeForeground)
+                .frame(width: 28, height: 28)
+                .background(isHovered ? Theme.chromeHover : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .overlay(alignment: .leading) {
+            if isHovered {
+                WorkspaceRowTooltip(text: help)
+                    .fixedSize()
+                    .offset(x: SidebarView.compactWidth - Theme.space2 * 2 + 5)
+                    .zIndex(10_000)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+/// Tooltip view shared by workspace rows and compact sidebar buttons.
+private struct WorkspaceRowTooltip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(.black.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
+            .allowsHitTesting(false)
     }
 }
