@@ -36,6 +36,8 @@ private struct PaneView: View {
     @State private var contextMenuAnchor: UnitPoint = .center
     @State private var panelDropActive = false
     @State private var panelDropSide: DropSide = .none
+    @State private var showCopiedToast = false
+    @State private var copiedToastTask: Task<Void, Never>?
 
     enum DropSide { case none, left, right, top, bottom }
     /// Bumped on each status-bar visibility transition so rapid back-to-back
@@ -147,7 +149,30 @@ private struct PaneView: View {
                 }.allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .bottom) {
+            if showCopiedToast {
+                Text("Copied to clipboard")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 12)
+                    .allowsHitTesting(false)
+            }
+        }
         .contentShape(Rectangle())
+        .onReceive(NotificationCenter.default.publisher(for: .clipboardCopied)) { _ in
+            guard isFocused else { return }
+            copiedToastTask?.cancel()
+            showCopiedToast = true
+            copiedToastTask = Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled else { return }
+                withAnimation(Theme.chromeTransition) { showCopiedToast = false }
+            }
+        }
         .onDrop(of: [.text], delegate: PaneZoneDrop(
             pane: pane, workspace: workspace, store: store,
             active: $panelDropActive, side: $panelDropSide
@@ -798,6 +823,7 @@ private struct PaneContextMenu: View {
                 isPresented = false
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(selection, forType: .string)
+                NotificationCenter.default.post(name: .clipboardCopied, object: nil)
             } label: {
                 HStack {
                     Text("Copy")
@@ -1246,26 +1272,20 @@ private struct SplitContainer: View {
     private static let maxFraction: Double = 0.9
 
     var body: some View {
-        guard case .split(let orientation, let first, let second, let storedFraction) = node.content else {
-            return AnyView(EmptyView())
-        }
-        // Pane zoom = "push the fraction on every split along the path to
-        // the zoomed pane all the way to one side, smoothly animated."
-        // Non-zoomed panes get squeezed to width 0 by SwiftUI's frame
-        // animation. NSViews follow the CALayer frame change, so the
-        // libghostty surface visibly scales (same mechanism as the
-        // sidebar's `.frame(width:)` morph) instead of cross-fading.
-        let firstContainsZoom = workspace.zoomedPaneId.map { first.contains(paneId: $0) } ?? false
-        let secondContainsZoom = !firstContainsZoom
-            && (workspace.zoomedPaneId.map { second.contains(paneId: $0) } ?? false)
-        let fraction: Double = {
-            if firstContainsZoom { return 1.0 }
-            if secondContainsZoom { return 0.0 }
-            return storedFraction
-        }()
-        let isZoomedAcrossThisSplit = firstContainsZoom || secondContainsZoom
-        return AnyView(
-            GeometryReader { geo in
+        Group {
+            if case .split(let orientation, let first, let second, let storedFraction) = node.content {
+                // Pane zoom = "push the fraction on every split along the path to
+                // the zoomed pane all the way to one side, smoothly animated."
+                // Non-zoomed panes get squeezed to width 0 by SwiftUI's frame
+                // animation. NSViews follow the CALayer frame change, so the
+                // libghostty surface visibly scales (same mechanism as the
+                // sidebar's `.frame(width:)` morph) instead of cross-fading.
+                let zoomedPaneId = workspace.zoomedPaneId
+                let firstContainsZoom = zoomedPaneId.map { first.contains(paneId: $0) } ?? false
+                let secondContainsZoom = zoomedPaneId.map { second.contains(paneId: $0) } ?? false
+                let fraction = firstContainsZoom ? 1.0 : secondContainsZoom ? 0.0 : storedFraction
+                let isZoomedAcrossThisSplit = firstContainsZoom || secondContainsZoom
+                GeometryReader { geo in
                 let total: CGFloat = orientation == .horizontal ? geo.size.width : geo.size.height
                 let usable = max(total - Self.dividerThickness, 0)
                 let firstSize = max(0, usable * fraction)
@@ -1337,7 +1357,8 @@ private struct SplitContainer: View {
                 // hosts the zoom button can animate in/out together with
                 // the split-tree morph.
             }
-        )
+        }
+    }
     }
 
     private func dragGesture(orientation: SplitOrientation, total: CGFloat) -> some Gesture {
@@ -1473,4 +1494,8 @@ private final class PaneZoneDrop: NSObject, DropDelegate, @unchecked Sendable {
         if workspace.zoomedPaneId != nil { workspace.zoomedPaneId = nil }
         return true
     }
+}
+
+extension Notification.Name {
+    static let clipboardCopied = Notification.Name("clipboardCopied")
 }

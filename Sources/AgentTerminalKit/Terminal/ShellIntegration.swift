@@ -1237,7 +1237,7 @@ enum AgentTerminalShellIntegration {
     static let mimocodePluginPackageJson = """
     {
       "name": "agentterminal",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "main": "agentterminal.js",
       "private": true
     }

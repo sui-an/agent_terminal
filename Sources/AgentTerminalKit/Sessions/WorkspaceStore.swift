@@ -82,14 +82,16 @@ final class WorkspaceStore {
 
     /// Mutate + schedule save. UI sites wrap in `withAnimation(Theme.chromeTransition)`.
     func setSidebarMode(_ mode: SidebarMode) {
-        guard sidebarMode != mode else { return }
-        sidebarMode = mode
-        scheduleSave()
+        applySidebarMode(&sidebarMode, mode)
     }
 
     func setRightSidebarMode(_ mode: SidebarMode) {
-        guard rightSidebarMode != mode else { return }
-        rightSidebarMode = mode
+        applySidebarMode(&rightSidebarMode, mode)
+    }
+
+    private func applySidebarMode(_ storage: inout SidebarMode, _ mode: SidebarMode) {
+        guard storage != mode else { return }
+        storage = mode
         scheduleSave()
     }
 

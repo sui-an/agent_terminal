@@ -676,7 +676,7 @@ final class GhosttySurfaceView: NSView {
         // libghostty copies the strings during init, so the lifetime only needs
         // to span the call below.
         let envCStrings = envDict.flatMap { (k, v) -> [UnsafeMutablePointer<CChar>] in
-            [strdup(k)!, strdup(v)!]
+            [strdup(k), strdup(v)].compactMap { $0 }
         }
         defer { envCStrings.forEach { free($0) } }
         var envVars = stride(from: 0, to: envCStrings.count, by: 2).map { i in

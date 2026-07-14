@@ -281,7 +281,7 @@ final class AppPersistence {
 
     private func writeToDisk() {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.sortedKeys]
         guard let data = try? encoder.encode(PersistedApp(windows: windows)) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }

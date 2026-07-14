@@ -5,7 +5,7 @@ import Foundation
 /// About panel matches the latest CHANGELOG `vX.Y` tag.
 enum AgentTerminalApp {
     static let name = "AgentTerminal"
-    static let displayVersion = "1.0.0"
+    static let displayVersion = "1.0.1"
     static let tagline = "AI Agent Orchestration Terminal"
     static let author = "AgentTerminal Contributors"
     static let authorURL = URL(string: "https://github.com/sui-an/agent_terminal")!
