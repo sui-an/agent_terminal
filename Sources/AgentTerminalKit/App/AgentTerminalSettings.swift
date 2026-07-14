@@ -61,7 +61,7 @@ enum AgentTerminalSettings {
     }
 
     /// Translates the `terminal.*` subdict to ghostty's flat key=value format
-    /// and pushes via `ghostty_config_load_string`. Called after
+    /// and pushes via a temp file + `ghostty_config_load_file`. Called after
     /// `ghostty_config_load_default_files` so user's agentterminal-side keys win over
     /// anything in `~/.config/ghostty/config`. Theme lines emit first; any
     /// user-set `terminal.cursor-color` / `background` / `palette` override
@@ -88,10 +88,16 @@ enum AgentTerminalSettings {
         }
         let text = lines.joined(separator: "\n")
         guard !text.isEmpty else { return }
-        text.withCString { cstr in
-            "agentterminal-settings".withCString { sourceName in
-                ghostty_config_load_string(config, cstr, UInt(strlen(cstr)), sourceName)
+        do {
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("agentterminal-settings-\(UUID().uuidString).conf")
+            try text.write(to: tmp, atomically: true, encoding: .utf8)
+            tmp.withUnsafeFileSystemRepresentation { path in
+                ghostty_config_load_file(config, path)
             }
+            try? FileManager.default.removeItem(at: tmp)
+        } catch {
+            NSLog("agentterminal: failed to write temp config: \(error)")
         }
     }
 
@@ -117,10 +123,16 @@ enum AgentTerminalSettings {
         // cursor there. The shell wrapper emits OSC 133 prompt markers with
         // the `cl=line` metadata libghostty needs to recognise it.
         let baseline = "cursor-click-to-move = true\n"
-        baseline.withCString { cstr in
-            "agentterminal-baseline".withCString { source in
-                ghostty_config_load_string(config, cstr, UInt(strlen(cstr)), source)
+        do {
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("agentterminal-baseline-\(UUID().uuidString).conf")
+            try baseline.write(to: tmp, atomically: true, encoding: .utf8)
+            tmp.withUnsafeFileSystemRepresentation { path in
+                ghostty_config_load_file(config, path)
             }
+            try? FileManager.default.removeItem(at: tmp)
+        } catch {
+            NSLog("agentterminal: failed to write baseline config: \(error)")
         }
     }
 

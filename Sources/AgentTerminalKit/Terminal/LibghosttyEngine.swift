@@ -31,8 +31,7 @@ final class LibghosttyApp {
             read_clipboard_cb: agentterminalReadClipboardCb,
             confirm_read_clipboard_cb: agentterminalConfirmReadClipboardCb,
             write_clipboard_cb: agentterminalWriteClipboardCb,
-            close_surface_cb: agentterminalCloseSurfaceCb,
-            tmux_control_cb: nil
+            close_surface_cb: agentterminalCloseSurfaceCb
         )
 
         guard let config = AgentTerminalSettings.makeGhosttyConfig() else {
@@ -227,6 +226,7 @@ private let agentterminalWriteClipboardCb: ghostty_runtime_write_clipboard_cb = 
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
+        NotificationCenter.default.post(name: .clipboardCopied, object: nil)
     }
 }
 private let agentterminalCloseSurfaceCb: ghostty_runtime_close_surface_cb = { _, _ in }
@@ -379,9 +379,7 @@ final class LibghosttyEngine: TerminalEngine {
         set { surfaceView.onSearchSelected = newValue }
     }
     var foregroundPid: pid_t? {
-        guard let surface = surfaceView.surface else { return nil }
-        let pid = pid_t(ghostty_surface_foreground_pid(surface))
-        return pid > 0 ? pid : nil
+        nil
     }
 
     init() {
@@ -975,7 +973,7 @@ final class GhosttySurfaceView: NSView {
         // don't route through here, so they fire at their own sites.
         onUserInput?()
         bytes.withCString { cstr in
-            ghostty_surface_text_input(surface, cstr, UInt(strlen(cstr)))
+            ghostty_surface_text(surface, cstr, UInt(strlen(cstr)))
         }
     }
 
@@ -1158,6 +1156,7 @@ final class GhosttySurfaceView: NSView {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(str, forType: .string)
+        NotificationCenter.default.post(name: .clipboardCopied, object: nil)
     }
 
     func readSelection() -> String? {
