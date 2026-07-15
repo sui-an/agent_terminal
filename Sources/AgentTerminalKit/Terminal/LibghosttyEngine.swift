@@ -821,16 +821,13 @@ final class GhosttySurfaceView: NSView {
             return
         }
 
-        // Cmd+C with a live selection — copy. Without selection — send
-        // SIGINT (\u{03}) so the running process can be interrupted.
+        // Cmd+C with a live selection — without this branch libghostty's
+        // bypassed keybinding system would leave Cmd+C dead.
         if cmdOnly,
-           event.charactersIgnoringModifiers?.lowercased() == "c"
+           event.charactersIgnoringModifiers?.lowercased() == "c",
+           ghostty_surface_has_selection(surface)
         {
-            if ghostty_surface_has_selection(surface) {
-                performCopy()
-            } else {
-                sendInputBytes("\u{03}", to: surface)
-            }
+            performCopy()
             return
         }
 
@@ -902,11 +899,17 @@ final class GhosttySurfaceView: NSView {
 
         // Ctrl+letter — NSEvent already gives the control byte (Ctrl+A →
         // "\u{01}"); IME would swallow these, so we forward them ourselves.
-        if mods.contains(.control), !mods.contains(.option),
-           let chars = event.characters, !chars.isEmpty,
-           let scalar = chars.unicodeScalars.first?.value, scalar < 0x20 {
-            sendInputBytes(chars, to: surface)
-            return
+        // Explicitly handle Ctrl+C to ensure SIGINT is always sent.
+        if mods.contains(.control), !mods.contains(.option) {
+            if event.charactersIgnoringModifiers?.lowercased() == "c" {
+                sendInputBytes("\u{03}", to: surface)
+                return
+            }
+            if let chars = event.characters, !chars.isEmpty,
+               let scalar = chars.unicodeScalars.first?.value, scalar < 0x20 {
+                sendInputBytes(chars, to: surface)
+                return
+            }
         }
 
         // Regular text + IME composition. inputContext routes through
