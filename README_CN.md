@@ -93,6 +93,14 @@ sudo spctl --global-enable       # AgentTerminal 跑过一次之后，立刻把 
 
 macOS **只拦第一次启动**。之后从 Spotlight、Dock、Finder 启动都跟普通 app 一样。
 
+### 升级注意事项
+
+升级时下载的新版安装包 macOS 也可能弹出提示。此时请在 **系统设置 → 隐私与安全性** 中找到被拦截的安装包，点击「仍要打开」即可。
+
+![风险提示](./static/images/risk-remand.png)
+
+![系统设置仍要打开](./static/images/systemsetting-open.png)
+
 ## 从源码构建
 
 需要 Xcode 26+ 和 macOS 14+（Sonoma，`@Observable` 的最低系统要求）。

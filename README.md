@@ -93,6 +93,14 @@ Note: this is a **system-wide switch**. While off, macOS allows any unsigned app
 
 macOS **only blocks the first launch**. After that, launching from Spotlight, Dock, or Finder works like any normal app.
 
+### Upgrade notes
+
+When upgrading, macOS may also show a warning for the newly downloaded installer package. If so, go to **System Settings → Privacy & Security**, find the blocked package, and click **Open Anyway**.
+
+![Security risk prompt](./static/images/risk-remand.png)
+
+![System Settings - Open Anyway](./static/images/systemsetting-open.png)
+
 ## Building from source
 
 Requires Xcode 26+ and macOS 14+ (Sonoma, the minimum for `@Observable`).
