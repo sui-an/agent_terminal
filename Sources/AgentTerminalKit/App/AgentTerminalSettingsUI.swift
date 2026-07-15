@@ -683,7 +683,7 @@ struct AgentTerminalSettingsView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(minWidth: 180)
+                .frame(minWidth: 180, alignment: .trailing)
             }
             SettingsHairline()
             SettingsRow(label: "font-size") {
@@ -707,7 +707,7 @@ struct AgentTerminalSettingsView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(minWidth: 180)
+                .frame(minWidth: 180, alignment: .trailing)
             }
             SettingsHairline()
             SettingsRow(label: "default-new-tab") {
@@ -720,7 +720,7 @@ struct AgentTerminalSettingsView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(minWidth: 180)
+                .frame(minWidth: 180, alignment: .trailing)
             }
             SettingsHairline()
             SettingsRow(label: "top bar search") {
