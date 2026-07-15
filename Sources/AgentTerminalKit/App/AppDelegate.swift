@@ -14,6 +14,17 @@ private enum MenuTag {
     static func workspaceIndex(from tag: Int) -> Int { tag - 101 }
 }
 
+private final class AgentPickerContext {
+    let template: AgentTemplate
+    let workspaceId: UUID
+    let store: WorkspaceStore
+    init(template: AgentTemplate, workspaceId: UUID, store: WorkspaceStore) {
+        self.template = template
+        self.workspaceId = workspaceId
+        self.store = store
+    }
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var windowControllers: [AgentTerminalWindowController] = [] {
@@ -829,11 +840,39 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
 
     @objc private func handleNewTab() {
         guard let store = activeStore, let workspace = store.active else { return }
-        // Keyboard convention: ⌘T is deterministic — open the user's default
-        // agent if set, otherwise Terminal. The visual `+` button keeps the
-        // "Ask each time" popover for mouse interaction.
-        let template = AgentTemplate.defaultLaunchTemplate(model: AgentTerminalSettingsModel.shared) ?? .terminal
-        store.addTab(in: workspace, template: template)
+        let model = AgentTerminalSettingsModel.shared
+        if let template = AgentTemplate.defaultLaunchTemplate(model: model) {
+            store.addTab(in: workspace, template: template)
+        } else {
+            let visible = AgentTemplate.visibleOrdered(model: model)
+            if visible.count <= 1 {
+                store.addTab(in: workspace, template: .terminal)
+            } else {
+                showAgentPicker(for: workspace, store: store)
+            }
+        }
+    }
+
+    private func showAgentPicker(for workspace: Workspace, store: WorkspaceStore) {
+        let menu = NSMenu()
+        for template in AgentTemplate.visibleOrdered(model: AgentTerminalSettingsModel.shared) {
+            let item = NSMenuItem(title: template.title, action: #selector(handleAgentPickerSelection(_:)), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: template.symbol, accessibilityDescription: nil)
+            item.representedObject = AgentPickerContext(template: template, workspaceId: workspace.id, store: store)
+            item.target = self
+            menu.addItem(item)
+        }
+        if let window = activeController?.window {
+            let location = NSPoint(x: window.frame.midX, y: window.frame.midY)
+            menu.popUp(positioning: nil, at: location, in: window.contentView)
+        }
+    }
+
+    @objc private func handleAgentPickerSelection(_ sender: NSMenuItem) {
+        guard let context = sender.representedObject as? AgentPickerContext else { return }
+        if let store = activeStore, let workspace = store.workspaces.first(where: { $0.id == context.workspaceId }) {
+            store.addTab(in: workspace, template: context.template)
+        }
     }
 
     @objc private func handleNewWorkspace() {
