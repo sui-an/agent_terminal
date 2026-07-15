@@ -167,6 +167,13 @@ struct BroadcastBar: View {
             kbd("⏎", "send")
             kbd("⇧⏎", "newline")
             kbd("esc", "close")
+            Button(action: close) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.chromeMuted)
+            }
+            .buttonStyle(.plain)
+            .help("Close broadcast input")
         }
     }
 
