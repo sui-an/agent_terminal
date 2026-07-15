@@ -877,12 +877,23 @@ final class GhosttySurfaceView: NSView {
             return
         }
 
-        // AgentTerminal-specific functional keys with explicit byte behavior. Skipped
-        // while IME is composing so Enter / Esc / arrows can dismiss / accept
-        // the candidate window without leaking through to the PTY.
+        // AgentTerminal-specific functional keys. Skipped while IME is composing
+        // so Enter / Esc / arrows can dismiss / accept the candidate window
+        // without leaking through to the PTY.
+        //
+        // We use sendKey first (ghostty_surface_key with the real NSEvent keycode)
+        // so Ghostty's key handler produces the correct control byte without
+        // bracketed-paste wrapping — ghostty_surface_text wraps in bracketed-paste,
+        // which breaks \r (Enter), \u{7F} (Backspace), etc.
+        // Fall back to handWrittenEscapeSequence bytes when Ghostty doesn't
+        // handle the key (e.g. modified keys with custom sequences).
         if !hasMarkedText(),
-           let bytes = Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) {
-            sendInputBytes(bytes, to: surface)
+           Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) != nil {
+            onUserInput?()
+            if !sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface),
+               let bytes = Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) {
+                sendInputBytes(bytes, to: surface)
+            }
             return
         }
 
@@ -1228,13 +1239,19 @@ final class GhosttySurfaceView: NSView {
         let firstScalar = chars.unicodeScalars.first?.value ?? 0
         let textToSend = (firstScalar >= 0xE000 && firstScalar <= 0xF8FF) ? "" : chars
 
+        // Matches ghostty.app's keyAction: only set text for printable characters
+        // (>= 0x20). Control characters like \r (Enter) are encoded by Ghostty
+        // from the keycode alone — setting text on them can trigger unintended
+        // bracketed-paste wrapping in ghostty_surface_key's composing=false path.
+        let hasText = textToSend.utf8.first.map { $0 >= 0x20 } ?? false
+
         return textToSend.withCString { cstr in
             var key = ghostty_input_key_s()
             key.action = action
             key.mods = mods
             key.consumed_mods = ghostty_input_mods_e(rawValue: 0)
             key.keycode = UInt32(event.keyCode)
-            key.text = textToSend.isEmpty ? nil : cstr
+            key.text = hasText ? cstr : nil
             key.unshifted_codepoint = 0
             key.composing = false
             return ghostty_surface_key(surface, key)
