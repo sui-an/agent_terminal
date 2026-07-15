@@ -214,9 +214,12 @@ final class AgentTerminalSettingsModel {
         } else {
             statusBarItems = StatusBarItemKind.defaultOrder
         }
-        let rawHiddenStatus = (statusbar["hidden"] as? [String]) ?? []
-        hiddenStatusBarItems = Set(rawHiddenStatus.compactMap(StatusBarItemKind.init(rawValue:)))
-        hiddenToolCallAgents = Set((statusbar["toolCallHidden"] as? [String]) ?? [])
+        if let rawHiddenStatus = statusbar["hidden"] as? [String] {
+            hiddenStatusBarItems = Set(rawHiddenStatus.compactMap(StatusBarItemKind.init(rawValue:)))
+        }
+        if let savedToolCallHidden = statusbar["toolCallHidden"] as? [String] {
+            hiddenToolCallAgents = Set(savedToolCallHidden)
+        }
 
         let terminals = parsed["terminals"] as? [String: Any] ?? [:]
         hiddenPresets = Set((terminals["hidden"] as? [String]) ?? [])
