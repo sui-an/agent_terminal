@@ -821,13 +821,16 @@ final class GhosttySurfaceView: NSView {
             return
         }
 
-        // Cmd+C with a live selection — without this branch libghostty's
-        // bypassed keybinding system would leave Cmd+C dead.
+        // Cmd+C with a live selection — copy. Without selection — send
+        // SIGINT (\u{03}) so the running process can be interrupted.
         if cmdOnly,
-           event.charactersIgnoringModifiers?.lowercased() == "c",
-           ghostty_surface_has_selection(surface)
+           event.charactersIgnoringModifiers?.lowercased() == "c"
         {
-            performCopy()
+            if ghostty_surface_has_selection(surface) {
+                performCopy()
+            } else {
+                sendInputBytes("\u{03}", to: surface)
+            }
             return
         }
 
