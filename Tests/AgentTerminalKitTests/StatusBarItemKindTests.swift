@@ -19,7 +19,6 @@ final class StatusBarItemKindTests: XCTestCase {
         // silently invalidates every user's saved configuration. Pin the
         // mapping so renames force an explicit test update.
         XCTAssertEqual(StatusBarItemKind.pythonVenv.rawValue, "python-venv")
-        XCTAssertEqual(StatusBarItemKind.nodeVersion.rawValue, "node-version")
         XCTAssertEqual(StatusBarItemKind.proxy.rawValue, "proxy")
         XCTAssertEqual(StatusBarItemKind.gitBranch.rawValue, "git-branch")
         XCTAssertEqual(StatusBarItemKind.gitDiff.rawValue, "git-diff")

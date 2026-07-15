@@ -223,7 +223,6 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
     /// rendering bypasses `visibleItems`.
     case toolCallActivity = "tool-call-activity"
     case pythonVenv = "python-venv"
-    case nodeVersion = "node-version"
     case proxy
     case remoteLogin = "remote-login"
     case gitBranch = "git-branch"
@@ -233,7 +232,6 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
         switch self {
         case .toolCallActivity: return "Tool calls"
         case .pythonVenv: return "Python venv"
-        case .nodeVersion: return "Node version"
         case .proxy: return "Proxy"
         case .remoteLogin: return "Remote Login"
         case .gitBranch: return "Git branch"
@@ -249,7 +247,6 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
         switch self {
         case .toolCallActivity: return nil
         case .pythonVenv: return "p.circle.fill"
-        case .nodeVersion: return "n.circle.fill"
         case .proxy: return "network"
         case .remoteLogin: return "person.fill"
         case .gitBranch: return "arrow.triangle.branch"
@@ -261,7 +258,7 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
     /// touched Settings → Status Bar. Tool-call activity goes first so a
     /// fresh Settings → Status Bar list renders it at the top.
     static let defaultOrder: [StatusBarItemKind] = [
-        .toolCallActivity, .remoteLogin, .pythonVenv, .nodeVersion, .proxy, .gitBranch, .gitDiff,
+        .toolCallActivity, .remoteLogin, .pythonVenv, .proxy, .gitBranch, .gitDiff,
     ]
 }
 
@@ -282,7 +279,6 @@ func paneStatusBarHasData(session: Session) -> Bool {
         switch item {
         case .toolCallActivity: if sessionWantsToolCallActivity(session) { return true }
         case .pythonVenv: if session.environment.pythonVenv != nil { return true }
-        case .nodeVersion: if session.environment.nodeVersion != nil { return true }
         case .proxy: if session.environment.proxy != nil { return true }
         case .remoteLogin: if session.remoteHost != nil { return true }
         case .gitBranch: if session.gitStatus.branch != nil { return true }
@@ -394,7 +390,7 @@ private struct PaneStatusBar: View {
     /// honors the kind's hidden/visible state).
     private var visibleItems: [StatusBarItemKind] {
         model.statusBarItems.filter {
-            $0 != .toolCallActivity && $0 != .nodeVersion && !model.hiddenStatusBarItems.contains($0)
+            $0 != .toolCallActivity && !model.hiddenStatusBarItems.contains($0)
         }
     }
 
@@ -403,7 +399,6 @@ private struct PaneStatusBar: View {
         switch item {
         case .toolCallActivity: EmptyView()  // rendered separately on the left
         case .pythonVenv: pythonSegment
-        case .nodeVersion: EmptyView()  // removed
         case .proxy: proxySegment
         case .remoteLogin: remoteLoginSegment
         case .gitBranch: branchSegment
@@ -417,26 +412,6 @@ private struct PaneStatusBar: View {
             StatusSegment(systemImage: "p.circle.fill") {
                 Text(venv).foregroundStyle(Theme.chromeForeground)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var nodeSegment: some View {
-        if let version = session.environment.nodeVersion {
-            let nvmDir = session.environment.nvmDirectory
-            SwitchableStatusSegment<String>(
-                systemImage: "n.circle.fill",
-                label: version,
-                helpText: "Switch Node version",
-                popoverWidth: 190,
-                popoverMaxHeight: 280,
-                emptyMessage: "No nvm versions found",
-                loadItems: { NodeVersionInventory.installedVersions(nvmDirectory: nvmDir) },
-                isCurrent: { NodeVersionInventory.isSameVersion($0, version) },
-                titleFor: { $0 },
-                commandFor: NodeVersionInventory.shellUseCommand,
-                session: session
-            )
         }
     }
 
