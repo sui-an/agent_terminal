@@ -899,15 +899,19 @@ final class GhosttySurfaceView: NSView {
 
         // Ctrl+letter — NSEvent already gives the control byte (Ctrl+A →
         // "\u{01}"); IME would swallow these, so we forward them ourselves.
-        // Explicitly handle Ctrl+C to ensure SIGINT is always sent.
-        if mods.contains(.control), !mods.contains(.option) {
+        // Use sendKey (ghostty_surface_key) so Ghostty's key handler
+        // produces the correct control byte without bracketed-paste wrapping
+        // — ghostty_surface_text wraps in bracketed-paste, which breaks
+        // control bytes like \u{03} (Ctrl+C / SIGINT).
+        if mods.contains(.control), !mods.contains(.option),
+           !hasMarkedText() {
             if event.charactersIgnoringModifiers?.lowercased() == "c" {
-                sendInputBytes("\u{03}", to: surface)
+                sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)
                 return
             }
             if let chars = event.characters, !chars.isEmpty,
                let scalar = chars.unicodeScalars.first?.value, scalar < 0x20 {
-                sendInputBytes(chars, to: surface)
+                sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)
                 return
             }
         }
