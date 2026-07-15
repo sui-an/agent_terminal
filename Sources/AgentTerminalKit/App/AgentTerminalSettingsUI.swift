@@ -45,7 +45,8 @@ final class AgentTerminalSettingsModel {
     /// present in `AgentTemplate.all` are appended after, so a new agent
     /// shipped in a future agentterminal still shows up.
     var agentOrder: [String] = []
-    var hiddenAgents: Set<String> = []
+    /// Default: only Claude Code, Codex, MiMoCode, OpenCode visible.
+    var hiddenAgents: Set<String> = ["gemini", "amp", "cursor", "copilot", "grok", "antigravity", "kimi", "pi", "kiro"]
     /// Per-agent CLI options appended after the binary name when launching.
     /// E.g. `agentOptions["claude-code"] = "--model opus"` → AGENTTERMINAL_AGENT
     /// becomes `claude --model opus`. The wrapper rc's `eval` splits on
@@ -388,7 +389,7 @@ final class AgentTerminalSettingsModel {
 
     func resetAgentCustomisation() {
         agentOrder = []
-        hiddenAgents = []
+        hiddenAgents = ["gemini", "amp", "cursor", "copilot", "grok", "antigravity", "kimi", "pi", "kiro"]
         agentOptions = [:]
         defaultAgentId = nil
         customAgents = []
