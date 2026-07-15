@@ -122,9 +122,13 @@ private struct PaneView: View {
             // is open, every visible pane receives the input, so outline each
             // one so the user can see where their typing will land.
             if workspace.broadcastActive {
+                // Top padding = 0 keeps the line flush with the pane edge
+                // (above the tab bar content so it doesn't overlap tab labels).
+                // SplitContainer's `.clipped()` prevents negative top padding,
+                // but 0 is safe since the line stays within bounds.
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(Theme.activityRunning, lineWidth: 2)
-                    .padding(EdgeInsets(top: -2, leading: 4, bottom: 4, trailing: 4))
+                    .stroke(Theme.activityRunning, lineWidth: 1)
+                    .padding(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
                     .allowsHitTesting(false)
             }
         }
