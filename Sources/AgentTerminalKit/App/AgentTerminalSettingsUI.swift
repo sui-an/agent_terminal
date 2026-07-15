@@ -1039,7 +1039,7 @@ private struct AgentReorderList: View {
 
     private var hasCustomisation: Bool {
         !model.agentOrder.isEmpty
-            || !model.hiddenAgents.isEmpty
+            || model.hiddenAgents != ["gemini", "amp", "cursor", "copilot", "grok", "antigravity", "kimi", "pi", "kiro"]
             || model.agentOptions.values.contains(where: { !$0.isEmpty })
             || model.defaultAgentId != nil
             || !model.customAgents.isEmpty
