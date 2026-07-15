@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import GhosttyKit
 
 
@@ -226,7 +227,7 @@ private let agentterminalWriteClipboardCb: ghostty_runtime_write_clipboard_cb = 
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
-        NotificationCenter.default.post(name: .clipboardCopied, object: nil)
+        NotificationCenter.default.post(name: NSNotification.Name("copyDidComplete"), object: nil)
     }
 }
 private let agentterminalCloseSurfaceCb: ghostty_runtime_close_surface_cb = { _, _ in }
@@ -379,7 +380,9 @@ final class LibghosttyEngine: TerminalEngine {
         set { surfaceView.onSearchSelected = newValue }
     }
     var foregroundPid: pid_t? {
-        nil
+        guard let surface = surfaceView.surface else { return nil }
+        let pid = pid_t(ghostty_surface_foreground_pid(surface))
+        return pid > 0 ? pid : nil
     }
 
     init() {
@@ -503,6 +506,10 @@ final class GhosttySurfaceView: NSView {
     /// grab; set by `TerminalView` from the pane's active state. See
     /// `TerminalEngine.grabsFocusOnMount` for the why (issue #24).
     var grabsFocusOnMount = true
+    /// Previous input source saved before switching to US English, so it can be
+    /// restored when the view loses focus.
+    private var previousInputSource: TISInputSource?
+
     private(set) var surface: ghostty_surface_t? {
         didSet {
             if surface != nil {
@@ -676,7 +683,7 @@ final class GhosttySurfaceView: NSView {
         // libghostty copies the strings during init, so the lifetime only needs
         // to span the call below.
         let envCStrings = envDict.flatMap { (k, v) -> [UnsafeMutablePointer<CChar>] in
-            [strdup(k), strdup(v)].compactMap { $0 }
+            [strdup(k)!, strdup(v)!]
         }
         defer { envCStrings.forEach { free($0) } }
         var envVars = stride(from: 0, to: envCStrings.count, by: 2).map { i in
@@ -782,6 +789,7 @@ final class GhosttySurfaceView: NSView {
             if let surface { ghostty_surface_set_focus(surface, true) }
             GhosttyDrawCoordinator.shared.setPriority(self, priority: .active)
             onFocus?()
+            switchToUSInputSource()
         }
         return became
     }
@@ -793,8 +801,60 @@ final class GhosttySurfaceView: NSView {
             if window != nil {
                 GhosttyDrawCoordinator.shared.setPriority(self, priority: .visible)
             }
+            restoreInputSource()
         }
         return resigned
+    }
+
+    // MARK: - Input source
+
+    /// Switch the global input source to US/ABC English, saving the previous
+    /// one so it can be restored when the view loses focus. Does nothing if
+    /// already on a keyboard layout (not an input method like Pinyin).
+    private func switchToUSInputSource() {
+        guard let current = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
+        // Check the category: keyboard layouts (com.apple.keylayout.*) are
+        // direct ASCII input — no need to switch. Input methods
+        // (com.apple.inputmethod.*) like Pinyin, Cangjie, Wubi need to be
+        // replaced with a raw keyboard layout for terminal use.
+        if let ptr = TISGetInputSourceProperty(current, kTISPropertyInputSourceCategory) {
+            let category = Unmanaged<CFString>.fromOpaque(ptr).takeUnretainedValue() as String
+            if category == (kTISCategoryKeyboardInputSource as String) {
+                return
+            }
+        }
+        previousInputSource = current
+
+        // Use CF-level dictionary (kTISPropertyInputSourceID is a CFString key)
+        // to avoid subtle bridging issues with Swift [CFString: String] → CFDictionary.
+        let filter = [
+            Unmanaged.passUnretained(kTISPropertyInputSourceID).toOpaque():
+            Unmanaged.passUnretained("com.apple.keylayout.US" as CFString).toOpaque()
+        ] as CFDictionary
+        guard let result = TISCreateInputSourceList(filter, false)?
+            .takeRetainedValue() as? [TISInputSource],
+              let us = result.first
+        else {
+            // Try ABC layout as fallback (ships on macOS 10.11+, near-identical).
+            let filter2 = [
+                Unmanaged.passUnretained(kTISPropertyInputSourceID).toOpaque():
+                Unmanaged.passUnretained("com.apple.keylayout.ABC" as CFString).toOpaque()
+            ] as CFDictionary
+            guard let result2 = TISCreateInputSourceList(filter2, false)?
+                .takeRetainedValue() as? [TISInputSource],
+                  let abc = result2.first
+            else { return }
+            TISSelectInputSource(abc)
+            return
+        }
+        TISSelectInputSource(us)
+    }
+
+    /// Restore the input source that was active before switching to US English.
+    private func restoreInputSource() {
+        guard let previous = previousInputSource else { return }
+        previousInputSource = nil
+        TISSelectInputSource(previous)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -835,18 +895,16 @@ final class GhosttySurfaceView: NSView {
         // ZLE already bind. Without this Cmd combos get swallowed by the
         // responder chain, and libghostty's default Option+Delete sequence
         // isn't what most shells recognise.
-        // Use sendKey (ghostty_surface_key) so Ghostty's key handler
-        // produces the correct control byte without bracketed-paste wrapping.
         if cmdOnly {
             switch event.keyCode {
-            case 123: sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+← → ^A
-            case 124: sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+→ → ^E
-            case 51:  sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+⌫ → ^U
+            case 123: sendInputBytes("\u{01}", to: surface); return  // Cmd+← → ^A
+            case 124: sendInputBytes("\u{05}", to: surface); return  // Cmd+→ → ^E
+            case 51:  sendInputBytes("\u{15}", to: surface); return  // Cmd+⌫ → ^U
             default:  break
             }
         }
         if mods.contains(.option), !cmd, !mods.contains(.control), event.keyCode == 51 {
-            sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)  // Option+⌫ → ^W
+            sendInputBytes("\u{17}", to: surface)                    // Option+⌫ → ^W
             return
         }
 
@@ -879,43 +937,22 @@ final class GhosttySurfaceView: NSView {
             return
         }
 
-        // AgentTerminal-specific functional keys. Skipped while IME is composing
-        // so Enter / Esc / arrows can dismiss / accept the candidate window
-        // without leaking through to the PTY.
-        //
-        // We use sendKey first (ghostty_surface_key with the real NSEvent keycode)
-        // so Ghostty's key handler produces the correct control byte without
-        // bracketed-paste wrapping — ghostty_surface_text wraps in bracketed-paste,
-        // which breaks \r (Enter), \u{7F} (Backspace), etc.
-        // Fall back to handWrittenEscapeSequence bytes when Ghostty doesn't
-        // handle the key (e.g. modified keys with custom sequences).
+        // AgentTerminal-specific functional keys with explicit byte behavior. Skipped
+        // while IME is composing so Enter / Esc / arrows can dismiss / accept
+        // the candidate window without leaking through to the PTY.
         if !hasMarkedText(),
-           Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) != nil {
-            onUserInput?()
-            if !sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface),
-               let bytes = Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) {
-                sendInputBytes(bytes, to: surface)
-            }
+           let bytes = Self.handWrittenEscapeSequence(forKeyCode: event.keyCode, modifierFlags: mods) {
+            sendInputBytes(bytes, to: surface)
             return
         }
 
         // Ctrl+letter — NSEvent already gives the control byte (Ctrl+A →
         // "\u{01}"); IME would swallow these, so we forward them ourselves.
-        // Use sendKey (ghostty_surface_key) so Ghostty's key handler
-        // produces the correct control byte without bracketed-paste wrapping
-        // — ghostty_surface_text wraps in bracketed-paste, which breaks
-        // control bytes like \u{03} (Ctrl+C / SIGINT).
         if mods.contains(.control), !mods.contains(.option),
-           !hasMarkedText() {
-            if event.charactersIgnoringModifiers?.lowercased() == "c" {
-                sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)
-                return
-            }
-            if let chars = event.characters, !chars.isEmpty,
-               let scalar = chars.unicodeScalars.first?.value, scalar < 0x20 {
-                sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)
-                return
-            }
+           let chars = event.characters, !chars.isEmpty,
+           let scalar = chars.unicodeScalars.first?.value, scalar < 0x20 {
+            sendInputBytes(chars, to: surface)
+            return
         }
 
         // Regular text + IME composition. inputContext routes through
@@ -996,7 +1033,7 @@ final class GhosttySurfaceView: NSView {
         // don't route through here, so they fire at their own sites.
         onUserInput?()
         bytes.withCString { cstr in
-            ghostty_surface_text(surface, cstr, UInt(strlen(cstr)))
+            ghostty_surface_text_input(surface, cstr, UInt(strlen(cstr)))
         }
     }
 
@@ -1179,7 +1216,7 @@ final class GhosttySurfaceView: NSView {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(str, forType: .string)
-        NotificationCenter.default.post(name: .clipboardCopied, object: nil)
+        NotificationCenter.default.post(name: NSNotification.Name("copyDidComplete"), object: nil)
     }
 
     func readSelection() -> String? {
@@ -1251,19 +1288,13 @@ final class GhosttySurfaceView: NSView {
         let firstScalar = chars.unicodeScalars.first?.value ?? 0
         let textToSend = (firstScalar >= 0xE000 && firstScalar <= 0xF8FF) ? "" : chars
 
-        // Matches ghostty.app's keyAction: only set text for printable characters
-        // (>= 0x20). Control characters like \r (Enter) are encoded by Ghostty
-        // from the keycode alone — setting text on them can trigger unintended
-        // bracketed-paste wrapping in ghostty_surface_key's composing=false path.
-        let hasText = textToSend.utf8.first.map { $0 >= 0x20 } ?? false
-
         return textToSend.withCString { cstr in
             var key = ghostty_input_key_s()
             key.action = action
             key.mods = mods
             key.consumed_mods = ghostty_input_mods_e(rawValue: 0)
             key.keycode = UInt32(event.keyCode)
-            key.text = hasText ? cstr : nil
+            key.text = textToSend.isEmpty ? nil : cstr
             key.unshifted_codepoint = 0
             key.composing = false
             return ghostty_surface_key(surface, key)

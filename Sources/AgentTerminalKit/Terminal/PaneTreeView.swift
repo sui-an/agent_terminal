@@ -36,8 +36,6 @@ private struct PaneView: View {
     @State private var contextMenuAnchor: UnitPoint = .center
     @State private var panelDropActive = false
     @State private var panelDropSide: DropSide = .none
-    @State private var showCopiedToast = false
-    @State private var copiedToastTask: Task<Void, Never>?
 
     enum DropSide { case none, left, right, top, bottom }
     /// Bumped on each status-bar visibility transition so rapid back-to-back
@@ -47,6 +45,7 @@ private struct PaneView: View {
     /// produce two restore Tasks where the first un-suspends mid-second
     /// animation and the documented conda-scrollback-wipe regression returns.
     @State private var sigwinchSuspensionGeneration = 0
+    @State private var showCopyToast = false
 
     var body: some View {
         let paneOpacity = isFocused ? 1.0 : Self.inactivePaneOpacity
@@ -125,7 +124,7 @@ private struct PaneView: View {
             if workspace.broadcastActive {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Theme.activityRunning, lineWidth: 2)
-                    .padding(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
+                    .padding(EdgeInsets(top: -2, leading: 4, bottom: 4, trailing: 4))
                     .allowsHitTesting(false)
             }
         }
@@ -156,30 +155,16 @@ private struct PaneView: View {
                 }.allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .bottom) {
-            if showCopiedToast {
-                Text("Copied to clipboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .padding(.bottom, 12)
-                    .allowsHitTesting(false)
+        .overlay(alignment: .center) { copyToastOverlay }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("copyDidComplete")))
+        { _ in
+            withAnimation(.easeInOut(duration: 0.25)) { showCopyToast = true }
+            Task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                withAnimation(.easeInOut(duration: 0.25)) { showCopyToast = false }
             }
         }
         .contentShape(Rectangle())
-        .onReceive(NotificationCenter.default.publisher(for: .clipboardCopied)) { _ in
-            guard isFocused else { return }
-            copiedToastTask?.cancel()
-            showCopiedToast = true
-            copiedToastTask = Task {
-                try? await Task.sleep(for: .seconds(1.5))
-                guard !Task.isCancelled else { return }
-                withAnimation(Theme.chromeTransition) { showCopiedToast = false }
-            }
-        }
         .onDrop(of: [.text], delegate: PaneZoneDrop(
             pane: pane, workspace: workspace, store: store,
             active: $panelDropActive, side: $panelDropSide
@@ -213,6 +198,25 @@ private struct PaneView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var copyToastOverlay: some View {
+        if showCopyToast {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Copied to clipboard")
+                    .font(Theme.mono(12, weight: .medium))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+            .transition(.opacity.animation(.easeInOut(duration: 0.25)))
+            .allowsHitTesting(false)
+        }
+    }
 }
 
 /// One configurable slot of the pane status bar. Order + visibility are
@@ -230,6 +234,7 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
     /// rendering bypasses `visibleItems`.
     case toolCallActivity = "tool-call-activity"
     case pythonVenv = "python-venv"
+    case nodeVersion = "node-version"
     case proxy
     case remoteLogin = "remote-login"
     case gitBranch = "git-branch"
@@ -239,6 +244,7 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
         switch self {
         case .toolCallActivity: return "Tool calls"
         case .pythonVenv: return "Python venv"
+        case .nodeVersion: return "Node version"
         case .proxy: return "Proxy"
         case .remoteLogin: return "Remote Login"
         case .gitBranch: return "Git branch"
@@ -254,6 +260,7 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
         switch self {
         case .toolCallActivity: return nil
         case .pythonVenv: return "p.circle.fill"
+        case .nodeVersion: return "n.circle.fill"
         case .proxy: return "network"
         case .remoteLogin: return "person.fill"
         case .gitBranch: return "arrow.triangle.branch"
@@ -265,7 +272,7 @@ enum StatusBarItemKind: String, CaseIterable, Codable, Hashable, Sendable {
     /// touched Settings → Status Bar. Tool-call activity goes first so a
     /// fresh Settings → Status Bar list renders it at the top.
     static let defaultOrder: [StatusBarItemKind] = [
-        .toolCallActivity, .remoteLogin, .pythonVenv, .proxy, .gitBranch, .gitDiff,
+        .toolCallActivity, .remoteLogin, .pythonVenv, .nodeVersion, .proxy, .gitBranch, .gitDiff,
     ]
 }
 
@@ -286,6 +293,7 @@ func paneStatusBarHasData(session: Session) -> Bool {
         switch item {
         case .toolCallActivity: if sessionWantsToolCallActivity(session) { return true }
         case .pythonVenv: if session.environment.pythonVenv != nil { return true }
+        case .nodeVersion: if session.environment.nodeVersion != nil { return true }
         case .proxy: if session.environment.proxy != nil { return true }
         case .remoteLogin: if session.remoteHost != nil { return true }
         case .gitBranch: if session.gitStatus.branch != nil { return true }
@@ -352,8 +360,8 @@ private struct StatusBarIconButton: View {
 /// Chrome status bar pinned to the bottom of the active pane — Warp-style
 /// approximation. libghostty owns the terminal grid, so we can't inline
 /// above the prompt; pinning to chrome below the terminal is the closest
-/// equivalent. Each segment is its own bordered pill with leading icon,
-/// stacked right-aligned. Hidden entirely when no segment has data.
+/// equivalent. Each segment packs an icon + text label, stacked
+/// right-aligned. Hidden entirely when no segment has data.
 private struct PaneStatusBar: View {
     @Bindable var session: Session
     /// Which pane this status bar belongs to. The zoom button uses this so
@@ -378,27 +386,22 @@ private struct PaneStatusBar: View {
             // them — narrow panes still surface every status at the cost of
             // a taller chrome row. Each row is right-aligned so the visual
             // matches the single-row layout when nothing wraps.
-            FlowLayout(alignment: .trailing, spacing: 6, rowSpacing: 2) {
+            FlowLayout(alignment: .trailing, spacing: 8, rowSpacing: 4) {
                 ForEach(visibleItems, id: \.self) { item in
                     segment(for: item)
                 }
             }
             .frame(maxWidth: .infinity)
         }
-        .font(Theme.mono(10))
-        .foregroundStyle(Theme.chromeMuted)
+        .font(Theme.mono(11))
         .padding(.horizontal, Theme.space2)
-        .padding(.vertical, 3)
-        .background(Theme.chromeHairline.opacity(0.35))
+        .padding(.vertical, 5)
+        .background(Theme.chromeBackground)
     }
 
-    /// Items that render inside the right-aligned `FlowLayout`. Activity
-    /// pill is excluded — it has its own hardcoded slot on the left of
-    /// the bar (driven by `showToolCallActivityPill`, which already
-    /// honors the kind's hidden/visible state).
     private var visibleItems: [StatusBarItemKind] {
         model.statusBarItems.filter {
-            $0 != .toolCallActivity && !model.hiddenStatusBarItems.contains($0)
+            $0 != .toolCallActivity && $0 != .nodeVersion && !model.hiddenStatusBarItems.contains($0)
         }
     }
 
@@ -407,6 +410,7 @@ private struct PaneStatusBar: View {
         switch item {
         case .toolCallActivity: EmptyView()  // rendered separately on the left
         case .pythonVenv: pythonSegment
+        case .nodeVersion: EmptyView()  // removed
         case .proxy: proxySegment
         case .remoteLogin: remoteLoginSegment
         case .gitBranch: branchSegment
@@ -420,6 +424,26 @@ private struct PaneStatusBar: View {
             StatusSegment(systemImage: "p.circle.fill") {
                 Text(venv).foregroundStyle(Theme.chromeForeground)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var nodeSegment: some View {
+        if let version = session.environment.nodeVersion {
+            let nvmDir = session.environment.nvmDirectory
+            SwitchableStatusSegment<String>(
+                systemImage: "n.circle.fill",
+                label: version,
+                helpText: "Switch Node version",
+                popoverWidth: 190,
+                popoverMaxHeight: 280,
+                emptyMessage: "No nvm versions found",
+                loadItems: { NodeVersionInventory.installedVersions(nvmDirectory: nvmDir) },
+                isCurrent: { NodeVersionInventory.isSameVersion($0, version) },
+                titleFor: { $0 },
+                commandFor: NodeVersionInventory.shellUseCommand,
+                session: session
+            )
         }
     }
 
@@ -487,22 +511,22 @@ private struct PaneStatusBar: View {
     }
 }
 
-/// One bordered segment of the status bar — leading SF Symbol icon at
+/// One segment of the status bar — leading SF Symbol icon at
 /// `chromeMuted`, body content rendered by the caller. Wraps each
-/// data-source (git, Python env, Node version, …) in a uniform pill so
-/// adding new sources is just `StatusSegment(systemImage: ...) { ... }`.
+/// data-source (git, Python env, Node version, …) so adding new sources
+/// is just `StatusSegment(systemImage: ...) { ... }`.
 private struct StatusSegment<Content: View>: View {
     let systemImage: String
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
             Image(systemName: systemImage)
                 .imageScale(.small)
-                .foregroundStyle(Theme.chromeMuted.opacity(0.7))
+                .foregroundStyle(Theme.chromeMuted)
             content()
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 4)
         .padding(.vertical, 2)
     }
 }
@@ -692,6 +716,7 @@ private struct ProxyStatusSegment: View {
                         // Click entry text → copy raw `name=value` to clipboard.
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(entry, forType: .string)
+                        NotificationCenter.default.post(name: NSNotification.Name("copyDidComplete"), object: nil)
                         isPopoverOpen = false
                     } onUnset: { name in
                         // `unset` lowercase + uppercase together — corporate
@@ -802,7 +827,7 @@ private struct PaneContextMenu: View {
                 isPresented = false
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(selection, forType: .string)
-                NotificationCenter.default.post(name: .clipboardCopied, object: nil)
+                NotificationCenter.default.post(name: NSNotification.Name("copyDidComplete"), object: nil)
             } label: {
                 HStack {
                     Text("Copy")
@@ -1251,20 +1276,26 @@ private struct SplitContainer: View {
     private static let maxFraction: Double = 0.9
 
     var body: some View {
-        Group {
-            if case .split(let orientation, let first, let second, let storedFraction) = node.content {
-                // Pane zoom = "push the fraction on every split along the path to
-                // the zoomed pane all the way to one side, smoothly animated."
-                // Non-zoomed panes get squeezed to width 0 by SwiftUI's frame
-                // animation. NSViews follow the CALayer frame change, so the
-                // libghostty surface visibly scales (same mechanism as the
-                // sidebar's `.frame(width:)` morph) instead of cross-fading.
-                let zoomedPaneId = workspace.zoomedPaneId
-                let firstContainsZoom = zoomedPaneId.map { first.contains(paneId: $0) } ?? false
-                let secondContainsZoom = zoomedPaneId.map { second.contains(paneId: $0) } ?? false
-                let fraction = firstContainsZoom ? 1.0 : secondContainsZoom ? 0.0 : storedFraction
-                let isZoomedAcrossThisSplit = firstContainsZoom || secondContainsZoom
-                GeometryReader { geo in
+        guard case .split(let orientation, let first, let second, let storedFraction) = node.content else {
+            return AnyView(EmptyView())
+        }
+        // Pane zoom = "push the fraction on every split along the path to
+        // the zoomed pane all the way to one side, smoothly animated."
+        // Non-zoomed panes get squeezed to width 0 by SwiftUI's frame
+        // animation. NSViews follow the CALayer frame change, so the
+        // libghostty surface visibly scales (same mechanism as the
+        // sidebar's `.frame(width:)` morph) instead of cross-fading.
+        let firstContainsZoom = workspace.zoomedPaneId.map { first.contains(paneId: $0) } ?? false
+        let secondContainsZoom = !firstContainsZoom
+            && (workspace.zoomedPaneId.map { second.contains(paneId: $0) } ?? false)
+        let fraction: Double = {
+            if firstContainsZoom { return 1.0 }
+            if secondContainsZoom { return 0.0 }
+            return storedFraction
+        }()
+        let isZoomedAcrossThisSplit = firstContainsZoom || secondContainsZoom
+        return AnyView(
+            GeometryReader { geo in
                 let total: CGFloat = orientation == .horizontal ? geo.size.width : geo.size.height
                 let usable = max(total - Self.dividerThickness, 0)
                 let firstSize = max(0, usable * fraction)
@@ -1336,8 +1367,7 @@ private struct SplitContainer: View {
                 // hosts the zoom button can animate in/out together with
                 // the split-tree morph.
             }
-        }
-    }
+        )
     }
 
     private func dragGesture(orientation: SplitOrientation, total: CGFloat) -> some Gesture {
@@ -1473,8 +1503,4 @@ private final class PaneZoneDrop: NSObject, DropDelegate, @unchecked Sendable {
         if workspace.zoomedPaneId != nil { workspace.zoomedPaneId = nil }
         return true
     }
-}
-
-extension Notification.Name {
-    static let clipboardCopied = Notification.Name("clipboardCopied")
 }

@@ -90,7 +90,7 @@ enum ImmediateTooltipAlignment {
 
 /// Lightweight immediate tooltip — appears instantly on hover, positioned
 /// below the trigger. Styled to match macOS system tooltips.
-private struct TooltipView: View {
+struct TooltipView: View {
     let text: String
 
     var body: some View {

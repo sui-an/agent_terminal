@@ -24,8 +24,8 @@ struct SidebarView: View {
     static let fullWidth: CGFloat = 220
     static let compactWidth: CGFloat = 52
     @Bindable var store: WorkspaceStore
-    /// Observed so chrome re-renders when the theme changes.
-    @State private var themeObserver = ThemeObserver.shared
+    /// Observed so chrome re-renders when the user switches themes.
+    @State private var settings = AgentTerminalSettingsModel.shared
     /// Id of the workspace currently being dragged. Set by `.onDrag`, cleared
     /// on drop. Lets each row compute whether the drag origin is above or
     /// below it so the drop indicator can flip edges.
@@ -45,7 +45,7 @@ struct SidebarView: View {
     @State private var sheet: SidebarSheet?
 
     var body: some View {
-        let _ = themeObserver.version
+        let _ = settings.terminalThemeSelection
         let isCompact = store.sidebarMode == .compact
         VStack(spacing: 0) {
             // Header
@@ -258,7 +258,6 @@ struct SidebarView: View {
                 sheet = .confirmCloseSource(request)
             }
         }
-
     }
 
     /// Shared subtitle string between the two bulk-close flows — folds
@@ -326,11 +325,11 @@ struct SidebarView: View {
             .padding(.horizontal, Theme.space2)
             .padding(.vertical, Theme.space2)
         }
+        .scrollClipDisabled(true)
         // ⌘⇧R parks the active workspace on the store; reveal its row so the
         // row's own rename popover can open. onChange catches a request made
         // while the sidebar is up; onAppear catches one parked while the
         // sidebar was hidden (SidebarView mounts only after the reveal).
-        .scrollClipDisabled(true)
         .onChange(of: store.pendingRenameWorkspace?.id) { _, _ in
             revealWorkspaceForRename(using: proxy)
         }
@@ -522,7 +521,7 @@ struct SidebarResizeHandle: View {
             .onHover { hovered in
                 isHovering = hovered
                 if hovered {
-                    AgentTerminalResizeCursor.horizontal.push()
+                    NSCursor.resizeLeftRight.push()
                 } else {
                     NSCursor.pop()
                 }
@@ -565,8 +564,7 @@ struct SidebarResizeHandle: View {
 }
 
 /// Compact sidebar button with a right-side tooltip that matches the workspace
-/// row tooltip style. Uses `.overlay` instead of `.popover` so the button
-/// fires on the first click.
+/// row tooltip style.
 private struct CompactSidebarButton: View {
     let systemName: String
     let help: String
@@ -590,37 +588,12 @@ private struct CompactSidebarButton: View {
         .onHover { isHovered = $0 }
         .overlay(alignment: .leading) {
             if isHovered {
-                WorkspaceRowTooltip(text: help)
+                TooltipView(text: help)
                     .fixedSize()
                     .offset(x: SidebarView.compactWidth - Theme.space2 * 2 + 5)
                     .zIndex(10_000)
                     .allowsHitTesting(false)
             }
         }
-    }
-}
-
-/// Tooltip view shared by workspace rows and compact sidebar buttons.
-private struct WorkspaceRowTooltip: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(.black.opacity(0.92))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
-            .allowsHitTesting(false)
     }
 }

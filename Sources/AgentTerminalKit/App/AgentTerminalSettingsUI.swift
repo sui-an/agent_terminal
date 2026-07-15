@@ -382,7 +382,15 @@ final class AgentTerminalSettingsModel {
         let themeChanged = (previousTerminal["theme"] as? String) != (terminal["theme"] as? String)
         let terminalChanged = !NSDictionary(dictionary: previousTerminal).isEqual(to: terminal)
         if terminalChanged {
-            LibghosttyApp.shared.reloadConfig()
+            // When "Follow System" is selected, settings.json has no
+            // terminal.theme (persistedThemeValue returns nil). Push the
+            // resolved theme so ghostty renders the correct colors.
+            if terminalThemeSelection == Self.followSystemThemeSelection,
+               let resolvedTheme = selectedTerminalTheme {
+                LibghosttyApp.shared.reloadConfig(withTerminalTheme: resolvedTheme)
+            } else {
+                LibghosttyApp.shared.reloadConfig()
+            }
             if themeChanged {
                 Theme.applyTheme(selectedTerminalTheme)
                 (NSApp.delegate as? AppDelegate)?.refreshThemeAppearances()
@@ -682,7 +690,6 @@ struct AgentTerminalSettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsRow(label: "theme") {
                 themeControl
-                    .frame(minWidth: 180, alignment: .trailing)
             }
             SettingsHairline()
             SettingsRow(label: "font-family") {
