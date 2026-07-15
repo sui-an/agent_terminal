@@ -835,16 +835,18 @@ final class GhosttySurfaceView: NSView {
         // ZLE already bind. Without this Cmd combos get swallowed by the
         // responder chain, and libghostty's default Option+Delete sequence
         // isn't what most shells recognise.
+        // Use sendKey (ghostty_surface_key) so Ghostty's key handler
+        // produces the correct control byte without bracketed-paste wrapping.
         if cmdOnly {
             switch event.keyCode {
-            case 123: sendInputBytes("\u{01}", to: surface); return  // Cmd+← → ^A
-            case 124: sendInputBytes("\u{05}", to: surface); return  // Cmd+→ → ^E
-            case 51:  sendInputBytes("\u{15}", to: surface); return  // Cmd+⌫ → ^U
+            case 123: sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+← → ^A
+            case 124: sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+→ → ^E
+            case 51:  sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface); return  // Cmd+⌫ → ^U
             default:  break
             }
         }
         if mods.contains(.option), !cmd, !mods.contains(.control), event.keyCode == 51 {
-            sendInputBytes("\u{17}", to: surface)                    // Option+⌫ → ^W
+            sendKey(event: event, action: GHOSTTY_ACTION_PRESS, surface: surface)  // Option+⌫ → ^W
             return
         }
 
