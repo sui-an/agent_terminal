@@ -21,7 +21,7 @@ final class AgentTerminalSettingsModel {
     ]
 
     /// Default hidden tool-call agents — all pills hidden.
-    static let defaultHiddenToolCallAgents: Set<String> = ["claude-code", "pi"]
+    static let defaultHiddenToolCallAgents: Set<String> = ["claude-code", "pi", "mimocode"]
 
     var fontFamily: String = ""
     /// `nil` = not overridden — let libghostty fall back to ghostty's own
