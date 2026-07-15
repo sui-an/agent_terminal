@@ -15,6 +15,14 @@ final class AgentTerminalSettingsModel {
     /// observe the same instance and react to user edits without a reload.
     static let shared = AgentTerminalSettingsModel()
 
+    /// Default hidden status bar items — only Remote Login visible.
+    static let defaultHiddenStatusBarItems: Set<StatusBarItemKind> = [
+        .toolCallActivity, .pythonVenv, .proxy, .gitBranch, .gitDiff
+    ]
+
+    /// Default hidden tool-call agents — all pills hidden.
+    static let defaultHiddenToolCallAgents: Set<String> = ["claude-code", "pi"]
+
     var fontFamily: String = ""
     /// `nil` = not overridden — let libghostty fall back to ghostty's own
     /// config (or its default). Writing a default 13 unconditionally would
@@ -69,16 +77,14 @@ final class AgentTerminalSettingsModel {
     /// Sibling of `hiddenAgents` for status bar slots. Hidden slots stay
     /// in `statusBarItems` so the user can re-enable without losing their
     /// custom order. Default: only Remote Login is visible.
-    var hiddenStatusBarItems: Set<StatusBarItemKind> = [
-        .toolCallActivity, .pythonVenv, .proxy, .gitBranch, .gitDiff
-    ]
+    var hiddenStatusBarItems: Set<StatusBarItemKind> = AgentTerminalSettingsModel.defaultHiddenStatusBarItems
     /// Per-agent visibility of the tool-call activity pill, keyed by builtin
     /// agent id (`claude-code`, `pi`). Empty = every tool-reporting agent
     /// shows its pill (the default). An id in the set suppresses that agent's
     /// pill only — Claude and Pi toggle independently. Customs follow their
     /// base id, so a Claude-based custom honours the `claude-code` entry.
-    /// Persisted under `statusbar.toolCallHidden`.
-    var hiddenToolCallAgents: Set<String> = []
+    /// Persisted under `statusbar.toolCallHidden`. Default: hidden.
+    var hiddenToolCallAgents: Set<String> = AgentTerminalSettingsModel.defaultHiddenToolCallAgents
     /// When true, agentterminal launches Claude tabs with `--resume <id>` using the
     /// conversation id persisted on each tab (captured via Claude's hook
     /// payload). When false, every Claude tab starts fresh — but the
@@ -492,10 +498,8 @@ final class AgentTerminalSettingsModel {
 
     func resetStatusBar() {
         statusBarItems = StatusBarItemKind.defaultOrder
-        hiddenStatusBarItems = [
-            .toolCallActivity, .pythonVenv, .proxy, .gitBranch, .gitDiff
-        ]
-        hiddenToolCallAgents = []
+        hiddenStatusBarItems = AgentTerminalSettingsModel.defaultHiddenStatusBarItems
+        hiddenToolCallAgents = AgentTerminalSettingsModel.defaultHiddenToolCallAgents
         scheduleSave()
     }
 
@@ -1706,8 +1710,8 @@ private struct StatusBarReorderList: View {
 
     private var hasCustomisation: Bool {
         model.statusBarItems != StatusBarItemKind.defaultOrder
-            || !model.hiddenStatusBarItems.isEmpty
-            || !model.hiddenToolCallAgents.isEmpty
+            || model.hiddenStatusBarItems != AgentTerminalSettingsModel.defaultHiddenStatusBarItems
+            || model.hiddenToolCallAgents != AgentTerminalSettingsModel.defaultHiddenToolCallAgents
     }
 
     private func toggleVisible(_ item: StatusBarItemKind) {
