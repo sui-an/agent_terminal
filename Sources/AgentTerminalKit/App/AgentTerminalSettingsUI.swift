@@ -68,8 +68,10 @@ final class AgentTerminalSettingsModel {
     var statusBarItems: [StatusBarItemKind] = StatusBarItemKind.defaultOrder
     /// Sibling of `hiddenAgents` for status bar slots. Hidden slots stay
     /// in `statusBarItems` so the user can re-enable without losing their
-    /// custom order.
-    var hiddenStatusBarItems: Set<StatusBarItemKind> = []
+    /// custom order. Default: only Remote Login is visible.
+    var hiddenStatusBarItems: Set<StatusBarItemKind> = [
+        .toolCallActivity, .pythonVenv, .proxy, .gitBranch, .gitDiff
+    ]
     /// Per-agent visibility of the tool-call activity pill, keyed by builtin
     /// agent id (`claude-code`, `pi`). Empty = every tool-reporting agent
     /// shows its pill (the default). An id in the set suppresses that agent's
@@ -490,7 +492,9 @@ final class AgentTerminalSettingsModel {
 
     func resetStatusBar() {
         statusBarItems = StatusBarItemKind.defaultOrder
-        hiddenStatusBarItems = []
+        hiddenStatusBarItems = [
+            .toolCallActivity, .pythonVenv, .proxy, .gitBranch, .gitDiff
+        ]
         hiddenToolCallAgents = []
         scheduleSave()
     }

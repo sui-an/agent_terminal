@@ -104,7 +104,14 @@ private struct PaneView: View {
                             .padding(.bottom, Theme.space3)
                         }
                     }
-                    // Status bar removed per user request
+                    if paneStatusBarHasData(session: active) {
+                        PaneStatusBar(
+                            session: active,
+                            paneId: pane.id,
+                            workspace: workspace,
+                            store: store
+                        )
+                    }
             } else {
                 Color.clear
             }
@@ -371,17 +378,18 @@ private struct PaneStatusBar: View {
             // them — narrow panes still surface every status at the cost of
             // a taller chrome row. Each row is right-aligned so the visual
             // matches the single-row layout when nothing wraps.
-            FlowLayout(alignment: .trailing, spacing: 8, rowSpacing: 4) {
+            FlowLayout(alignment: .trailing, spacing: 6, rowSpacing: 2) {
                 ForEach(visibleItems, id: \.self) { item in
                     segment(for: item)
                 }
             }
             .frame(maxWidth: .infinity)
         }
-        .font(Theme.mono(11))
+        .font(Theme.mono(10))
+        .foregroundStyle(Theme.chromeMuted)
         .padding(.horizontal, Theme.space2)
-        .padding(.vertical, 5)
-        .background(Theme.chromeBackground)
+        .padding(.vertical, 3)
+        .background(Theme.chromeHairline.opacity(0.35))
     }
 
     /// Items that render inside the right-aligned `FlowLayout`. Activity
@@ -488,18 +496,14 @@ private struct StatusSegment<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
             Image(systemName: systemImage)
                 .imageScale(.small)
-                .foregroundStyle(Theme.chromeMuted)
+                .foregroundStyle(Theme.chromeMuted.opacity(0.7))
             content()
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(Theme.chromeFaint, lineWidth: 1)
-        )
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
     }
 }
 
