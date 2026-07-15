@@ -53,6 +53,9 @@ mkdir -p "${APP}/Contents/Resources"
 
 cp .build/release/AgentTerminal "${APP}/Contents/MacOS/${APP_NAME}"
 cp .build/release/AgentTerminalHook "${APP}/Contents/MacOS/AgentTerminalHook"
+# Strip debug symbols from release binaries (~1MB savings)
+strip -S "${APP}/Contents/MacOS/${APP_NAME}"
+strip -S "${APP}/Contents/MacOS/AgentTerminalHook"
 # Convenience symlink: `agentforward list` == `AgentTerminal agent-forward list`
 ln -sf "${APP_NAME}" "${APP}/Contents/MacOS/agentforward"
 

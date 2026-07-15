@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import GhosttyKit
 
 
@@ -506,9 +505,6 @@ final class GhosttySurfaceView: NSView {
     /// grab; set by `TerminalView` from the pane's active state. See
     /// `TerminalEngine.grabsFocusOnMount` for the why (issue #24).
     var grabsFocusOnMount = true
-    /// Previous input source saved before switching to US English, so it can be
-    /// restored when the view loses focus.
-    private var previousInputSource: TISInputSource?
 
     private(set) var surface: ghostty_surface_t? {
         didSet {
@@ -789,7 +785,6 @@ final class GhosttySurfaceView: NSView {
             if let surface { ghostty_surface_set_focus(surface, true) }
             GhosttyDrawCoordinator.shared.setPriority(self, priority: .active)
             onFocus?()
-            switchToUSInputSource()
         }
         return became
     }
@@ -801,60 +796,8 @@ final class GhosttySurfaceView: NSView {
             if window != nil {
                 GhosttyDrawCoordinator.shared.setPriority(self, priority: .visible)
             }
-            restoreInputSource()
         }
         return resigned
-    }
-
-    // MARK: - Input source
-
-    /// Switch the global input source to US/ABC English, saving the previous
-    /// one so it can be restored when the view loses focus. Does nothing if
-    /// already on a keyboard layout (not an input method like Pinyin).
-    private func switchToUSInputSource() {
-        guard let current = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
-        // Check the category: keyboard layouts (com.apple.keylayout.*) are
-        // direct ASCII input — no need to switch. Input methods
-        // (com.apple.inputmethod.*) like Pinyin, Cangjie, Wubi need to be
-        // replaced with a raw keyboard layout for terminal use.
-        if let ptr = TISGetInputSourceProperty(current, kTISPropertyInputSourceCategory) {
-            let category = Unmanaged<CFString>.fromOpaque(ptr).takeUnretainedValue() as String
-            if category == (kTISCategoryKeyboardInputSource as String) {
-                return
-            }
-        }
-        previousInputSource = current
-
-        // Use CF-level dictionary (kTISPropertyInputSourceID is a CFString key)
-        // to avoid subtle bridging issues with Swift [CFString: String] → CFDictionary.
-        let filter = [
-            Unmanaged.passUnretained(kTISPropertyInputSourceID).toOpaque():
-            Unmanaged.passUnretained("com.apple.keylayout.US" as CFString).toOpaque()
-        ] as CFDictionary
-        guard let result = TISCreateInputSourceList(filter, false)?
-            .takeRetainedValue() as? [TISInputSource],
-              let us = result.first
-        else {
-            // Try ABC layout as fallback (ships on macOS 10.11+, near-identical).
-            let filter2 = [
-                Unmanaged.passUnretained(kTISPropertyInputSourceID).toOpaque():
-                Unmanaged.passUnretained("com.apple.keylayout.ABC" as CFString).toOpaque()
-            ] as CFDictionary
-            guard let result2 = TISCreateInputSourceList(filter2, false)?
-                .takeRetainedValue() as? [TISInputSource],
-                  let abc = result2.first
-            else { return }
-            TISSelectInputSource(abc)
-            return
-        }
-        TISSelectInputSource(us)
-    }
-
-    /// Restore the input source that was active before switching to US English.
-    private func restoreInputSource() {
-        guard let previous = previousInputSource else { return }
-        previousInputSource = nil
-        TISSelectInputSource(previous)
     }
 
     override func keyDown(with event: NSEvent) {
