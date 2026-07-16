@@ -97,7 +97,7 @@ macOS **only blocks the first launch**. After that, launching from Spotlight, Do
 
 When upgrading, macOS may also show a warning for the newly downloaded installer package. If so, go to **System Settings → Privacy & Security**, find the blocked package, and click **Open Anyway**.
 
-![Security risk prompt](./static/images/risk-remand.png)
+<img src="./static/images/risk-remand.png" width="30%" alt="Security risk prompt">
 
 ![System Settings - Open Anyway](./static/images/systemsetting-open.png)
 
