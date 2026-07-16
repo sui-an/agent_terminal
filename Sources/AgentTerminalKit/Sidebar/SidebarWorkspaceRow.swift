@@ -163,7 +163,7 @@ struct SidebarWorkspaceRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(workspace.title)
                     .font(Theme.display(13, weight: .regular))
-                    .foregroundStyle(isActive ? Theme.chromeForeground : Theme.chromeForeground.opacity(0.78))
+                    .foregroundStyle(isActive ? Theme.chromeForeground : Theme.chromeMuted)
                     .lineLimit(1)
                 subtitleRow
             }

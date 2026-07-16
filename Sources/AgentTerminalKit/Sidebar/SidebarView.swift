@@ -26,6 +26,7 @@ struct SidebarView: View {
     @Bindable var store: WorkspaceStore
     /// Observed so chrome re-renders when the user switches themes.
     @State private var settings = AgentTerminalSettingsModel.shared
+    @State private var themeObserver = ThemeObserver.shared
     /// Id of the workspace currently being dragged. Set by `.onDrag`, cleared
     /// on drop. Lets each row compute whether the drag origin is above or
     /// below it so the drop indicator can flip edges.
@@ -46,6 +47,7 @@ struct SidebarView: View {
 
     var body: some View {
         let _ = settings.terminalThemeSelection
+        let _ = themeObserver.version
         let isCompact = store.sidebarMode == .compact
         VStack(spacing: 0) {
             // Header
